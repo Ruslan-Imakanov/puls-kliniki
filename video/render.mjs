@@ -196,10 +196,39 @@ async function main() {
     console.log('предупреждения:', [...warns]); console.log('ошибки страницы:', errs);
     await browser.close(); return;
   }
+  if (has('--audit')) { // каждая подсветка и курсор целиком в кадре: под шапкой, над субтитрами, не под карточкой
+    if (has('--nocam')) await page.evaluate(() => { window.__vo.noCamera = true; });
+    const seen = new Map(); let curKey = null, t0 = 0;
+    const bad = (k, why) => { const e = seen.get(k); if (!e.why.includes(why)) e.why.push(why); };
+    for (let t = 0; t < TL.total; t += 0.2) {
+      await seek(t);
+      const p = await page.evaluate(() => window.__vo.probe());
+      if (p.cursor && (p.cursor.y > 682 || p.cursor.y < 0 || p.cursor.x < 0 || p.cursor.x > 1440)) {
+        const k = p.scene + ' | курсор'; if (!seen.has(k)) seen.set(k, { t, why: [] }); bad(k, `курсор вне кадра y=${Math.round(p.cursor.y)}`);
+      }
+      if (!p.sel) { curKey = null; continue; }
+      const k = p.scene + ' | ' + p.sel;
+      if (k !== curKey) { curKey = k; t0 = t; if (!seen.has(k)) seen.set(k, { t, why: [] }); }
+      if (t - t0 < 1.2 || !p.settled) continue;
+      if (!seen.get(k).shot) seen.get(k).shot = +t.toFixed(1);
+      if (p.missing) bad(k, 'нет элемента');
+      else {
+        if (p.tall) bad(k, `выше кадра и не выровнено: ${p.h}px при зоне ${p.bandB - p.bandT}px (y ${p.y1})`);
+        else if (!p.clipped && p.fy < 0.97) bad(k, `видно ${Math.round(p.fy * 100)}% по высоте (y ${p.y1}…${p.y2}, зона ${p.bandT}…${p.bandB})`);
+        if (p.fx < 0.97) bad(k, `видно ${Math.round(p.fx * 100)}% по ширине`);
+        if (p.modal && p.fy < 0.97) bad(k, 'окно: ' + JSON.stringify(p.modal));
+      }
+    }
+    fs.writeFileSync(path.join(DIR, 'out', 'hl_times.json'), JSON.stringify([...seen].filter(([, e]) => e.shot).map(([k, e]) => [e.shot, k])));
+    const list = [...seen].filter(([, e]) => e.why.length);
+    list.forEach(([k, e]) => console.log(`${(e.t / 60 | 0)}:${String(Math.floor(e.t % 60)).padStart(2, '0')}  ${k}\n        ${e.why.join('; ')}`));
+    console.log(`подсветок проверено: ${seen.size}, с замечаниями: ${list.length}; предупреждения:`, [...warns], 'ошибки:', errs);
+    await browser.close(); return;
+  }
   if (arg('--stills')) {
     const ts = arg('--stills').split(',').map(Number);
     let last = 0;
-    for (const T of ts) { for (let t = last; t < T; t += 1 / FPS * 3) await seek(t); await seek(T); last = T; await page.screenshot({ path: path.join(DIR, 'out', `still_${String(T).padStart(5, '0')}.jpg`), type: 'jpeg', quality: 85 }); }
+    for (const T of ts) { for (let t = last; t < T; t += 1 / FPS * 3) await seek(t); await seek(T); last = T; await page.screenshot({ path: path.join(DIR, 'out', `still_${String(T).padStart(5, '0')}.jpg`), type: 'jpeg', quality: 85 }); if (has('--probe')) console.log(T, JSON.stringify(await page.evaluate(() => window.__vo.probe()))); }
     console.log('кадры готовы; предупреждения:', [...warns], 'ошибки:', errs);
     await browser.close(); return;
   }

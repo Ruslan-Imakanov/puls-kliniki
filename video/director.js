@@ -2,6 +2,8 @@
 // Всё вычисляется от t (никаких CSS-анимаций), поэтому кадры детерминированы и рендерятся покадрово.
 // window.__vo.setup(timeline) — один раз; await window.__vo.seek(t) → { dirty } — на каждый кадр.
 (() => {
+  // Безопасная зона кадра: ниже — субтитры и плашка раздела, туда ничего важного не ставим
+  const SAFE_BOTTOM = 128, SAFE_Y = innerHeight - SAFE_BOTTOM;
   const css = `
   #vo-root{position:fixed;inset:0;z-index:2147483000;pointer-events:none;font-family:"Golos Text",system-ui,sans-serif;color:#fff}
   #vo-spot{position:fixed;border-radius:12px;box-shadow:0 0 0 3px #5fd0bb,0 0 0 9px rgba(95,208,187,.22),0 0 0 4000px rgba(5,16,14,.5);opacity:0}
@@ -59,6 +61,10 @@
   .vs .logo b{font:600 30px "Unbounded";color:#fff}
   .vs .pulse{position:absolute;left:0;right:0;bottom:120px;height:160px;opacity:.5}
   .vs .pulse path{fill:none;stroke:#5fd0bb;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+  /* в ролике окно стоит над субтитрами, а у страницы есть запас прокрутки, чтобы низ можно было поднять в кадр */
+  dialog#modal{margin:14px auto auto!important;max-height:${SAFE_Y - 22}px!important}
+  dialog#modal .modal-inner{max-height:${SAFE_Y - 24}px!important}
+  .main{padding-bottom:${SAFE_BOTTOM + 40}px}
   `;
   const st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
   const root = document.createElement('div'); root.id = 'vo-root';
@@ -73,19 +79,165 @@
   const raf2 = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 
   let TL = null, cur = { scene: -1 }, done = new Set(), lastSig = '', warn = [];
-  const S = { spot: null, spotFrom: null, spotT: -9, hlSel: null, scroll: null, cursor: null, card: null, cardT: -9, cardOff: -9, hover: null };
+  const S = { spot: null, spotFrom: null, spotT: -9, hlSel: null, scrolls: [], lastFrame: -9, card: null, cardT: -9, cardOff: -9, hover: null };
+  const framed = new Set();
 
-  function targetRect(sel, opts = {}) {
-    const host = document.querySelector('dialog[open]') && sel.startsWith('dialog') ? document : document;
-    const els = [...host.querySelectorAll(sel)].map(el => {
+  function targetEls(sel, opts = {}) {
+    return [...document.querySelectorAll(sel)].map(el => {
       if (opts.parent || /^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName)) return el.closest('.f, .seg, label') || el;
       return el;
     }).filter(el => el.getClientRects().length && !el.closest('[hidden]'));
+  }
+  const ovf = v => v !== 'visible';
+  // Прямоугольник элемента, обрезанный контейнерами с overflow (кроме stop и выше) — то, что реально видно
+  function clipRect(el, stop) {
+    const b = el.getBoundingClientRect(), r = { x1: b.left, y1: b.top, x2: b.right, y2: b.bottom };
+    for (let p = el.parentElement; p && p !== stop && p !== document.body; p = p.parentElement) {
+      const cs = getComputedStyle(p);
+      if (!ovf(cs.overflowX) && !ovf(cs.overflowY)) continue;
+      const q = p.getBoundingClientRect();
+      if (ovf(cs.overflowX)) { r.x1 = Math.max(r.x1, q.left); r.x2 = Math.min(r.x2, q.right); }
+      if (ovf(cs.overflowY)) { r.y1 = Math.max(r.y1, q.top); r.y2 = Math.min(r.y2, q.bottom); }
+    }
+    return r;
+  }
+  function union(rs) {
+    const u = { x1: Infinity, y1: Infinity, x2: -Infinity, y2: -Infinity };
+    rs.forEach(r => { u.x1 = Math.min(u.x1, r.x1); u.y1 = Math.min(u.y1, r.y1); u.x2 = Math.max(u.x2, r.x2); u.y2 = Math.max(u.y2, r.y2); });
+    return u;
+  }
+  function targetRect(sel, opts = {}) {
+    const els = targetEls(sel, opts);
     if (!els.length) return null;
-    let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
-    els.forEach(el => { const r = el.getBoundingClientRect(); x1 = Math.min(x1, r.left); y1 = Math.min(y1, r.top); x2 = Math.max(x2, r.right); y2 = Math.max(y2, r.bottom); });
+    const u = union(els.map(el => clipRect(el)));
+    // рамка не выходит за кадр: не заходит под липкую шапку и под субтитры; длинное обрезаем по последней целой строке
+    u.x1 = Math.max(u.x1, 6); u.x2 = Math.min(u.x2, innerWidth - 6);
+    if (els.every(pinned)) { u.y1 = Math.max(u.y1, 6); u.y2 = Math.min(u.y2, innerHeight - 6); }
+    else {
+      const sc = scroller(els[0], 'y'), band = safeBand(sc, u), lim = band.b + 4;
+      u.y1 = Math.max(u.y1, band.t - 4);
+      if (u.y2 > lim) {
+        const rows = els.flatMap(el => [el, ...el.querySelectorAll('tr, li, .tile, .f')]).map(e => e.getBoundingClientRect().bottom).filter(b => b <= lim && b > u.y1 + 30);
+        u.y2 = rows.length ? Math.max(...rows) : lim;
+      }
+    }
+    if (u.x2 <= u.x1 || u.y2 <= u.y1) return null;
     const pad = 8;
-    return { x: x1 - pad, y: y1 - pad, w: x2 - x1 + pad * 2, h: y2 - y1 + pad * 2 };
+    return { x: u.x1 - pad, y: u.y1 - pad, w: u.x2 - u.x1 + pad * 2, h: u.y2 - u.y1 + pad * 2 };
+  }
+  // Контейнер, который прокручивается по оси (null — окно)
+  function scroller(el, axis) {
+    for (let p = el.parentElement; p && p !== document.body && p !== document.documentElement; p = p.parentElement) {
+      const cs = getComputedStyle(p), o = axis === 'y' ? cs.overflowY : cs.overflowX;
+      if (cs.position === 'sticky' || cs.position === 'fixed') continue; // боковую панель не листаем
+      if (/(auto|scroll)/.test(o) && (axis === 'y' ? p.scrollHeight > p.clientHeight + 1 : p.scrollWidth > p.clientWidth + 1)) return p;
+    }
+    return null;
+  }
+  function overflowParent(el) {
+    for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) { const cs = getComputedStyle(p); if (ovf(cs.overflowX) || ovf(cs.overflowY)) return p; }
+    return null;
+  }
+  // Липкая шапка, боковая панель, окно поверх страницы — прокрутка их контейнера их не двигает
+  function pinned(el) {
+    const sc = scroller(el, 'y');
+    for (let p = el; p && p !== sc && p !== document.body; p = p.parentElement) {
+      const ps = getComputedStyle(p).position;
+      if (ps === 'fixed' || (ps === 'sticky' && overflowParent(p) === sc)) return true;
+    }
+    return false;
+  }
+  function safeBand(sc, r) {
+    if (sc) { const q = sc.getBoundingClientRect(); return { t: Math.max(q.top, 0) + 6, b: Math.min(q.bottom, SAFE_Y) - 6 }; }
+    let t = 8;
+    const top = !document.querySelector('dialog[open]') && document.querySelector('.top');
+    if (top) { const q = top.getBoundingClientRect(); if (r.x2 > q.left && r.x1 < q.right) t = q.bottom + 10; }
+    return { t, b: SAFE_Y - 8 };
+  }
+  // Куда прокрутить, чтобы must целиком оказался в безопасной зоне (prefer — выровнять верх этого элемента)
+  function planY(sel, opts, preferSel) {
+    const els = targetEls(sel, opts);
+    if (!els.length || els.every(pinned)) return null;
+    const sc = scroller(els[0], 'y');
+    const r = union(els.map(el => clipRect(el, sc)));
+    const band = safeBand(sc, r), H = band.b - band.t, h = r.y2 - r.y1;
+    const cur = sc ? sc.scrollTop : scrollY;
+    const max = sc ? sc.scrollHeight - sc.clientHeight : document.documentElement.scrollHeight - innerHeight;
+    let dy = 0;
+    const pe = preferSel && targetEls(preferSel)[0];
+    if (pe && scroller(pe, 'y') === sc) dy = pe.getBoundingClientRect().top - band.t - 4;
+    const m = Math.max(0, Math.min(48, (H - h) / 2));
+    if (h > H) dy = r.y1 - band.t - 4;
+    else if (r.y1 - dy < band.t) dy = r.y1 - band.t - m;
+    else if (r.y2 - dy > band.b) dy = r.y2 - band.b + m;
+    const to = Math.round(Math.max(0, Math.min(max, cur + dy)));
+    return Math.abs(to - cur) > 3 ? { el: sc, axis: 'y', from: cur, to } : null;
+  }
+  // По горизонтали — только внутри широких таблиц: показать нужные столбцы
+  function planX(sel, opts) {
+    const els = targetEls(sel, opts);
+    if (!els.length) return null;
+    const sc = scroller(els[0], 'x');
+    if (!sc) return null;
+    const q = sc.getBoundingClientRect(), r = union(els.map(el => clipRect(el, sc)));
+    const stick = sc.querySelector('.sticky-first tr > :first-child');
+    const sw = stick && !els.some(el => el.contains(stick) || el === stick) ? stick.getBoundingClientRect().width : 0;
+    const left = q.left + sw, w = r.x2 - r.x1;
+    let dx = 0;
+    if (w > q.right - left) dx = -sc.scrollLeft;
+    else if (r.x2 > q.right - 8) dx = r.x2 - q.right + 32;
+    else if (r.x1 < left + 8) dx = r.x1 - left - 32;
+    const to = Math.round(Math.max(0, Math.min(sc.scrollWidth - sc.clientWidth, sc.scrollLeft + dx)));
+    return Math.abs(to - sc.scrollLeft) > 3 ? { el: sc, axis: 'x', from: sc.scrollLeft, to } : null;
+  }
+  function frame(sel, opts, t, preferSel) {
+    if (window.__vo.noCamera || !sel) return;
+    const moves = [planX(sel, opts), planY(sel, opts, preferSel)].filter(Boolean);
+    moves.forEach(mv => {
+      S.scrolls = S.scrolls.filter(o => !(o.el === mv.el && o.axis === mv.axis));
+      S.scrolls.push({ ...mv, t0: t, d: Math.min(1.1, 0.55 + Math.abs(mv.to - mv.from) / 1800) });
+    });
+    S.lastFrame = t;
+  }
+  function applyScrolls(t) {
+    if (!S.scrolls.length) return false;
+    S.scrolls = S.scrolls.filter(o => {
+      const k = ease((t - o.t0) / o.d), v = Math.round(lerp(o.from, o.to, k));
+      if (o.axis === 'y') { if (o.el) o.el.scrollTop = v; else window.scrollTo(scrollX, v); }
+      else o.el.scrollLeft = v;
+      return k < 1;
+    });
+    return true;
+  }
+  // Для проверки кадра: какая доля подсветки видна в безопасной зоне
+  function probe() {
+    const out = { sel: S.hlSel, settled: !S.scrolls.length };
+    const cu = $('vo-cursor');
+    if (+cu.style.opacity > 0.9) { const m = cu.style.transform.match(/translate\(([-\d.]+)px, ([-\d.]+)px\)/); if (m) out.cursor = { x: +m[1] + 4, y: +m[2] + 2 }; }
+    if (!S.hlSel) return out;
+    const els = targetEls(S.hlSel, S.hlOpts);
+    if (!els.length) { out.missing = true; return out; }
+    const raw = union(els.map(el => { const b = el.getBoundingClientRect(); return { x1: b.left, y1: b.top, x2: b.right, y2: b.bottom }; }));
+    const sx = scroller(els[0], 'x'), wide = sx && raw.x2 - raw.x1 > sx.clientWidth;
+    const vis = union(els.map(el => clipRect(el)));
+    const band = pinned(els[0]) ? { t: 0, b: innerHeight - 8 } : safeBand(null, raw), dlg = document.querySelector('dialog[open] .modal-body');
+    const bt = dlg && els[0].closest('dialog') ? Math.max(band.t, dlg.getBoundingClientRect().top) : band.t;
+    const vy = Math.max(0, Math.min(vis.y2, band.b + 8) - Math.max(vis.y1, pinned(els[0]) ? 0 : bt - 10));
+    const mb = dlg && els[0].closest('dialog') && dlg.getBoundingClientRect();
+    out.modal = mb ? { sh: dlg.scrollHeight, ch: dlg.clientHeight, top: Math.round(mb.top), bottom: Math.round(mb.bottom), st: dlg.scrollTop } : null;
+    const vx = Math.max(0, Math.min(vis.x2, innerWidth) - Math.max(vis.x1, 0));
+    out.h = Math.round(raw.y2 - raw.y1); out.y1 = Math.round(raw.y1); out.y2 = Math.round(raw.y2); out.bandT = Math.round(bt); out.bandB = Math.round(band.b);
+    out.fy = (raw.y2 - raw.y1) ? vy / (raw.y2 - raw.y1) : 1;
+    out.fx = wide ? 1 : (raw.x2 - raw.x1) ? vx / (raw.x2 - raw.x1) : 1;
+    out.tall = out.h > band.b - bt + 12 && Math.abs(Math.max(raw.y1, bt) - bt) > 40;
+    out.clipped = out.h > band.b - bt + 12;
+    const card = $('vo-card');
+    if (+card.style.opacity > 0.5) {
+      const c = card.getBoundingClientRect();
+      const ix = Math.max(0, Math.min(c.right, vis.x2) - Math.max(c.left, vis.x1)), iy = Math.max(0, Math.min(c.bottom, vis.y2) - Math.max(c.top, vis.y1));
+      out.underCard = ix * iy / Math.max(1, (vis.x2 - vis.x1) * (vis.y2 - vis.y1));
+    }
+    return out;
   }
   const center = r => ({ x: r.x + r.w / 2, y: r.y + r.h / 2 });
   function fire(el, type, x, y) { el.dispatchEvent(new PointerEvent(type, { bubbles: true, clientX: x, clientY: y, pointerType: 'mouse' })); }
@@ -108,19 +260,11 @@
     }
     if (a.hover) { const r = targetRect(a.hover); const el = q(a.hover); if (r && el) { const c = center(r); fire(el, 'pointermove', c.x, c.y); S.hover = { sel: a.hover }; } else warn.push('hover ' + a.hover); }
     if (a.unhover) { document.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: 2, clientY: 2 })); fire(document.body, 'pointermove', 2, 2); S.hover = null; }
-    if (a.scroll) {
-      const el = q(a.scroll);
-      if (el) {
-        const r = el.getBoundingClientRect(), y0 = window.scrollY;
-        const maxY = document.documentElement.scrollHeight - innerHeight;
-        const y1 = Math.max(0, Math.min(maxY, y0 + r.top - 110));
-        S.scroll = { y0, y1, t0: t, d: 0.9 };
-      } else warn.push('scroll ' + a.scroll);
-    }
-    if (a.card) { S.card = a.card; S.cardT = t; $('vo-card').innerHTML = TL.cards[a.card] || ''; }
     if (a.off) { S.hlSel = null; if (S.card) { S.cardOff = t; } }
+    if (a.card) { S.card = a.card; S.cardT = t; S.cardOff = -9; $('vo-card').innerHTML = TL.cards[a.card] || ''; }
     if (a.hl) { S.hlSel = a.hl; S.hlOpts = { parent: a.parent }; S.spotT = t; S.spotFrom = S.spot; }
-    if (a.hlAfter) { S.pendingHl = { sel: a.hlAfter, at: t + 0.6 }; }
+    if (a.hl || a.scroll) frame(a.hl || a.scroll, { parent: a.parent }, t, a.scroll);
+    if (a.hlAfter) { S.hlSel = null; S.pendingHl = { sel: a.hlAfter, at: t + 0.6 }; }
   }
 
   function cursorFor(scene, t) {
@@ -136,7 +280,7 @@
   async function enterScene(i, t) {
     const sc = TL.scenes[i];
     cur = { scene: i };
-    S.hlSel = null; S.spot = null; S.card = null; S.cardOff = -9; S.scroll = null; S.pendingHl = null; S.hover = null;
+    S.hlSel = null; S.spot = null; S.card = null; S.cardOff = -9; S.scrolls = []; S.pendingHl = null; S.hover = null;
     $('vo-card').style.opacity = 0;
     $('vo-slide').innerHTML = sc.kind === 'slide' ? TL.slides[sc.slide] || '' : '';
     if (sc.kind === 'app') {
@@ -156,19 +300,28 @@
     if (i < 0) i = TL.scenes.length - 1;
     const sc = TL.scenes[i];
     if (cur.scene !== i) { await enterScene(i, t); dirty = true; }
+    // камера заранее: к кнопке — до появления курсора, к подсветке — чуть раньше рамки
+    const DOM = ['tab', 'radio', 'select', 'set', 'file', 'click', 'close'];
+    for (let k = 0; k < sc.acts.length; k++) {
+      const a = sc.acts[k], key = i + ':' + k;
+      if (done.has(key) || framed.has(key)) continue;
+      const cur = a.click || a.hover;
+      if (cur && t >= a.t - 1.7) { framed.add(key); frame(cur, {}, t); dirty = true; }
+      else if (!cur && (a.hl || a.scroll) && t >= a.t - 0.6) {
+        framed.add(key);
+        const before = sc.acts.slice(0, k).some((b, j) => !done.has(i + ':' + j) && DOM.some(x => b[x]));
+        if (!before && !DOM.some(x => a[x])) { frame(a.hl || a.scroll, { parent: a.parent }, t, a.scroll); dirty = true; }
+      }
+    }
     // действия этой сцены, время которых наступило
     for (let k = 0; k < sc.acts.length; k++) {
       const key = i + ':' + k;
       if (!done.has(key) && t >= sc.acts[k].t) { done.add(key); await runAction(sc.acts[k], t); dirty = true; }
     }
-    if (S.pendingHl && t >= S.pendingHl.at) { S.hlSel = S.pendingHl.sel; S.spotT = t; S.spotFrom = S.spot; S.pendingHl = null; dirty = true; }
-    // прокрутка
-    if (S.scroll) {
-      const k = ease((t - S.scroll.t0) / S.scroll.d);
-      window.scrollTo(0, Math.round(lerp(S.scroll.y0, S.scroll.y1, k)));
-      if (k >= 1) S.scroll = null;
-      dirty = true;
-    }
+    if (S.pendingHl && t >= S.pendingHl.at) { S.hlSel = S.pendingHl.sel; S.hlOpts = {}; S.spotT = t; S.spotFrom = S.spot; S.pendingHl = null; frame(S.hlSel, {}, t); dirty = true; }
+    // страж: если подсветка уехала из кадра (раскрылась таблица, перестроился экран) — догнать её
+    if (S.hlSel && !S.scrolls.length && t - S.lastFrame > 0.4) frame(S.hlSel, S.hlOpts, t);
+    if (applyScrolls(t)) dirty = true;
     // слайд
     const slide = $('vo-slide');
     if (sc.kind === 'slide') {
@@ -193,7 +346,7 @@
     // подсветка
     const spot = $('vo-spot');
     let target = S.hlSel ? targetRect(S.hlSel, S.hlOpts) : null;
-    if (S.hlSel && !target) { if (!warn.includes('hl ' + S.hlSel)) warn.push('hl ' + S.hlSel); }
+    if (S.hlSel && !target && !targetEls(S.hlSel, S.hlOpts).length) { if (!warn.includes('hl ' + S.hlSel)) warn.push('hl ' + S.hlSel); }
     if (target) {
       const k = ease((t - S.spotT) / 0.5);
       const from = S.spotFrom || { ...target, x: target.x + target.w * 0.04, y: target.y + target.h * 0.04, w: target.w * 0.92, h: target.h * 0.92 };
@@ -221,7 +374,7 @@
       const r = targetRect(sel) || S.lastCursorRect;
       if (r) {
         S.lastCursorRect = r;
-        const c = center(r), start = { x: c.x + 260, y: c.y + 180 };
+        const c = center(r), start = { x: c.x + (c.x > innerWidth / 2 ? -260 : 260), y: c.y + (c.y > SAFE_Y / 2 ? -180 : 180) };
         const k = ease(Math.min(1, cf.k));
         const x = lerp(start.x, c.x, k), y = lerp(start.y, c.y, k);
         const fadeOut = cf.after > (cf.a.hover ? 1.8 : 0.5) ? ease((cf.after - (cf.a.hover ? 1.8 : 0.5)) / 0.4) : 0;
@@ -239,7 +392,9 @@
     const subText = sub ? sub.text : '';
     $('vo-sub').textContent = subText;
     $('vo-chap').innerHTML = sc.chapter ? `<i></i>${sc.chapter}` : '';
-    $('vo-chap').style.display = sc.kind === 'slide' ? 'none' : '';
+    const chap = $('vo-chap');
+    chap.style.display = sc.kind === 'slide' ? 'none' : '';
+    if (S.spot && chap.textContent) { const c = chap.getBoundingClientRect(), r = S.spot; if (r.x < c.right && r.x + r.w > c.left && r.y + r.h > c.top - 6) chap.style.display = 'none'; }
     const pw = Math.round(innerWidth * t / TL.total);
     $('vo-prog').style.width = pw + 'px';
     // затемнение между разделами
@@ -253,11 +408,11 @@
     // слой должен быть внутри открытого <dialog>, иначе окно перекроет подсветку
     const host = document.querySelector('dialog[open]') || document.body;
     if (root.parentNode !== host) { host.appendChild(root); dirty = true; }
-    const sig = subText + '|' + i + '|' + pw + '|' + (S.hlSel || '') + '|' + Math.round(window.scrollY);
+    const sig = subText + '|' + i + '|' + pw + '|' + (S.hlSel || '') + '|' + Math.round(window.scrollY) + '|' + (document.querySelector('dialog[open] .modal-body')?.scrollTop || 0);
     if (sig !== lastSig) { lastSig = sig; dirty = true; }
     if (dirty) await raf2();
     return { dirty, warn: warn.splice(0) };
   }
 
-  window.__vo = { setup: tl => { TL = tl; }, seek };
+  window.__vo = { setup: tl => { TL = tl; }, seek, probe: () => ({ ...probe(), scene: TL.scenes[cur.scene]?.id, card: !!S.card }) };
 })();
