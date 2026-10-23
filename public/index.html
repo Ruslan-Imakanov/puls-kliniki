@@ -1,8 +1,44 @@
 <!doctype html>
-<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Клиника — управленческий учёт</title><link rel="stylesheet" href="styles.css"></head>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Пульс клиники</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=Unbounded:wght@500;600&display=swap">
+<link rel="stylesheet" href="styles.css">
+</head>
 <body>
-<header><h1 id="title">Управленческий учёт<span class="demo">демо-данные</span></h1>
-<label>Период: <select id="period"><option value="3">3 месяца</option><option value="6">6 месяцев</option><option value="12" selected>12 месяцев</option></select></label></header>
-<main id="app">Загрузка…</main>
-<script type="module" src="app.js"></script></body></html>
+<!--BODY-->
+<div class="app">
+  <aside class="side">
+    <div class="brand">
+      <svg class="brand-mark" width="30" height="30" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8"/><path d="M5 17h5l2.5-6 4 11 3-8 1.5 3H27"/></svg>
+      <div class="brand-txt"><b>Пульс клиники</b><span id="clinicName"></span></div>
+    </div>
+    <nav id="sideNav" class="side-nav" aria-label="Разделы"></nav>
+    <div class="side-foot">
+      <button type="button" id="themeBtn" class="theme-btn"><svg class="ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z"/></svg><span id="themeLbl">Авто</span></button>
+      <span class="kbd-hint"><kbd>N</kbd> новая операция</span>
+    </div>
+  </aside>
+  <div class="main">
+    <header class="top">
+      <div class="top-title"><h1 id="pageTitle">Обзор</h1><span id="modeBadge"></span></div>
+      <div id="period" class="period"></div>
+      <button type="button" id="addOp" class="btn primary add-op"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Операция</button>
+    </header>
+    <main id="view" class="view" tabindex="-1"></main>
+  </div>
+  <nav class="bnav" id="bnav" aria-label="Разделы"></nav>
+  <button type="button" id="fab" class="fab" aria-label="Добавить операцию"><svg class="ico" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+  <div id="moreSheet" class="sheet" hidden></div>
+</div>
+<dialog id="modal"></dialog>
+<div id="tip" class="tip" role="tooltip" hidden></div>
+<div id="toasts" class="toasts" aria-live="polite"></div>
+<!--/BODY-->
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
