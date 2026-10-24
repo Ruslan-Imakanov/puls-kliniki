@@ -1,6 +1,6 @@
 // Оболочка: навигация, период, маршрутизация, общие элементы, форма операции.
 import { $, $$, esc, opt, money, compactC, moneyC, pct, today, curMonth, addMonths, monthsBetween, monLong, monLabel, fmtDate, prefGet, prefSet, toast, openModal, arm, parseNum, formData, isPartialMonth } from './util.js';
-import { store, commit, add, update, remove } from './store.js';
+import { store, commit, add, update, remove, hooks } from './store.js';
 import { GROUPS } from './model.js';
 import { spanMonths } from './calc.js';
 import { drawCharts, resetCharts } from './charts.js';
@@ -103,7 +103,8 @@ export function render() {
   $$('[data-nav]').forEach(b => b.classList.toggle('on', b.dataset.nav === id));
   $$('.bnav [data-nav]').forEach(b => b.classList.toggle('on', b.dataset.nav === id || (b.dataset.nav === 'more' && !MOBILE_MAIN.includes(id))));
   $('#pageTitle').textContent = s.name;
-  $('#modeBadge').innerHTML = store.mode === 'demo' ? '<span class="pill warn">Демо-данные</span>' : '';
+  $('#modeBadge').innerHTML = store.mode === 'demo' ? `<span class="pill warn">Демо-данные</span>${window.PULSE_DEMO_ONLY ? '' : ' <a class="pill info" href="app.html">Войти в свою клинику</a>'}`
+    : store.mode === 'cloud' && hooks.role && hooks.role() !== 'owner' ? `<span class="pill">${esc(hooks.roleName())}</span>` : '';
   const noPeriod = ['import', 'refs', 'settings', 'stock'].includes(id);
   $('#period').hidden = noPeriod;
   if (!noPeriod) renderPeriod();
@@ -112,7 +113,7 @@ export function render() {
   try { views[id](el, months(), viewState.params); }
   catch (e) { console.error(e); el.innerHTML = `<div class="card empty"><h2>Раздел не открылся</h2><p>${esc(e.message)}</p><p class="muted">Попробуйте другой период или восстановите данные в «Настройках».</p></div>`; }
   drawCharts(el);
-  if (!store.saveOk) toast('Браузер не даёт сохранить данные (приватный режим?). Изменения пропадут после закрытия вкладки.', 'warn');
+  if (store.mode !== 'cloud' && !store.saveOk) toast('Браузер не даёт сохранить данные (приватный режим?). Изменения пропадут после закрытия вкладки.', 'warn');
 }
 export function rerender() { viewState.keep = true; render(); }
 

@@ -6,6 +6,8 @@ import { GROUPS, emptyState, defaultSettings } from './model.js';
 
 const KEY = 'clinicbi:data:v1';
 export const store = { s: null, mode: 'demo', saveOk: true };
+// В облачном режиме (cloud.js) сохранение и новые id подменяются: данные уходят в базу, а не в браузер.
+export const hooks = { persist: null, nid: null };
 const listeners = [];
 export const onChange = fn => listeners.push(fn);
 
@@ -27,12 +29,13 @@ export function load() {
   return 'demo';
 }
 export function save() {
+  if (hooks.persist) { hooks.persist(); return true; }
   try { localStorage.setItem(KEY, JSON.stringify(store.s)); store.saveOk = true; }
   catch (e) { store.saveOk = false; }
   return store.saveOk;
 }
 
-export const nid = () => store.s.nextId++;
+export const nid = () => (hooks.nid ? hooks.nid() : store.s.nextId++);
 export function log(action, text) {
   store.s.log.unshift({ t: new Date().toISOString(), action, text });
   if (store.s.log.length > 400) store.s.log.length = 400;
@@ -69,16 +72,26 @@ export function usage(coll, id) {
   return f ? f() : 0;
 }
 
-export function resetDemo() { store.s = demoState(); store.mode = 'demo'; commit('Данные', 'Загружены демо-данные'); }
+export function resetDemo() {
+  const cloud = store.mode === 'cloud', name = store.s.settings.clinicName, log = store.s.log;
+  store.s = demoState();
+  if (cloud) { store.s.settings.clinicName = name; store.s.log = log; }
+  store.mode = cloud ? 'cloud' : 'demo';
+  commit('Данные', 'Загружены демо-данные');
+}
 export function clearAll() {
   const st = store.s.settings;
-  store.s = emptyState(); store.s.settings = { ...st }; store.mode = 'local';
+  const cloud = store.mode === 'cloud', log = store.s.log;
+  store.s = emptyState(); store.s.settings = { ...st }; store.mode = cloud ? 'cloud' : 'local';
+  if (cloud) store.s.log = log;
   commit('Данные', 'Все данные очищены, начат чистый учёт');
 }
 export const exportJSON = () => JSON.stringify({ ...store.s, exported: today() }, null, 1);
 export function importJSON(text) {
   const s = JSON.parse(text);
   if (!s || !Array.isArray(s.ops) || !Array.isArray(s.categories)) throw new Error('Это не резервная копия программы: нет операций или статей.');
-  store.s = migrate(s); store.mode = s.demo ? 'demo' : 'local';
+  const cloud = store.mode === 'cloud', name = store.s.settings.clinicName, log = store.s.log;
+  store.s = migrate(s);
+  if (cloud) { store.s.settings.clinicName = name; store.s.log = log; store.mode = 'cloud'; } else store.mode = s.demo ? 'demo' : 'local';
   commit('Данные', 'Восстановлено из резервной копии');
 }

@@ -38,21 +38,25 @@ create table public.invites (
   primary key (clinic_id, email)
 );
 
-create or replace function public.member_role(c uuid) returns text
+-- Служебные функции проверки прав — в схеме private, её нет в API: вызвать напрямую нельзя, только из политик.
+create schema if not exists private;
+grant usage on schema private to authenticated;
+
+create or replace function private.member_role(c uuid) returns text
 language sql stable security definer set search_path = public as $$
   select role from public.clinic_members where clinic_id = c and user_id = auth.uid()
 $$;
-create or replace function public.is_member(c uuid) returns boolean
+create or replace function private.is_member(c uuid) returns boolean
 language sql stable security definer set search_path = public as $$
   select exists (select 1 from public.clinic_members where clinic_id = c and user_id = auth.uid())
 $$;
-create or replace function public.can_fin(c uuid) returns boolean
+create or replace function private.can_fin(c uuid) returns boolean
 language sql stable security definer set search_path = public as $$
-  select coalesce(public.member_role(c) in ('owner', 'accountant'), false)
+  select coalesce(private.member_role(c) in ('owner', 'accountant'), false)
 $$;
-create or replace function public.can_clin(c uuid) returns boolean
+create or replace function private.can_clin(c uuid) returns boolean
 language sql stable security definer set search_path = public as $$
-  select coalesce(public.member_role(c) in ('owner', 'accountant', 'manager'), false)
+  select coalesce(private.member_role(c) in ('owner', 'accountant', 'manager'), false)
 $$;
 
 -- Новая клиника: создатель становится владельцем
@@ -87,25 +91,27 @@ begin
   return n;
 end $$;
 
+revoke all on function private.member_role(uuid), private.is_member(uuid), private.can_fin(uuid), private.can_clin(uuid) from public, anon;
+grant execute on function private.member_role(uuid), private.is_member(uuid), private.can_fin(uuid), private.can_clin(uuid) to authenticated;
 revoke execute on function public.create_clinic(text), public.accept_invites() from public, anon;
 grant execute on function public.create_clinic(text), public.accept_invites() to authenticated;
 
 alter table public.clinics enable row level security;
-create policy "members read clinic" on public.clinics for select to authenticated using (public.is_member(id));
+create policy "members read clinic" on public.clinics for select to authenticated using (private.is_member(id));
 create policy "owner edits clinic" on public.clinics for update to authenticated
-  using (public.member_role(id) = 'owner') with check (public.member_role(id) = 'owner');
+  using (private.member_role(id) = 'owner') with check (private.member_role(id) = 'owner');
 
 alter table public.clinic_members enable row level security;
-create policy "members see team" on public.clinic_members for select to authenticated using (public.is_member(clinic_id));
-create policy "owner adds" on public.clinic_members for insert to authenticated with check (public.member_role(clinic_id) = 'owner');
+create policy "members see team" on public.clinic_members for select to authenticated using (private.is_member(clinic_id));
+create policy "owner adds" on public.clinic_members for insert to authenticated with check (private.member_role(clinic_id) = 'owner');
 create policy "owner changes roles" on public.clinic_members for update to authenticated
-  using (public.member_role(clinic_id) = 'owner') with check (public.member_role(clinic_id) = 'owner');
+  using (private.member_role(clinic_id) = 'owner') with check (private.member_role(clinic_id) = 'owner');
 create policy "owner removes, member leaves" on public.clinic_members for delete to authenticated
-  using (public.member_role(clinic_id) = 'owner' or (user_id = auth.uid() and role <> 'owner'));
+  using (private.member_role(clinic_id) = 'owner' or (user_id = auth.uid() and role <> 'owner'));
 
 alter table public.invites enable row level security;
 create policy "owner manages invites" on public.invites for all to authenticated
-  using (public.member_role(clinic_id) = 'owner') with check (public.member_role(clinic_id) = 'owner');
+  using (private.member_role(clinic_id) = 'owner') with check (private.member_role(clinic_id) = 'owner');
 
 -- ---------- данные клиники ----------
 create table public.accounts (clinic_id uuid not null references public.clinics(id) on delete cascade, id bigint not null,
@@ -161,24 +167,24 @@ declare t text;
 begin
   foreach t in array array['accounts', 'categories', 'counterparties', 'ops', 'budget'] loop
     execute format('alter table public.%I enable row level security', t);
-    execute format('create policy "read" on public.%I for select to authenticated using (public.is_member(clinic_id))', t);
-    execute format('create policy "insert" on public.%I for insert to authenticated with check (public.can_fin(clinic_id))', t);
-    execute format('create policy "update" on public.%I for update to authenticated using (public.can_fin(clinic_id)) with check (public.can_fin(clinic_id))', t);
-    execute format('create policy "delete" on public.%I for delete to authenticated using (public.can_fin(clinic_id))', t);
+    execute format('create policy "read" on public.%I for select to authenticated using (private.is_member(clinic_id))', t);
+    execute format('create policy "insert" on public.%I for insert to authenticated with check (private.can_fin(clinic_id))', t);
+    execute format('create policy "update" on public.%I for update to authenticated using (private.can_fin(clinic_id)) with check (private.can_fin(clinic_id))', t);
+    execute format('create policy "delete" on public.%I for delete to authenticated using (private.can_fin(clinic_id))', t);
   end loop;
   foreach t in array array['departments', 'doctors', 'resources', 'channels', 'items', 'services', 'activity', 'sales', 'marketing', 'stock'] loop
     execute format('alter table public.%I enable row level security', t);
-    execute format('create policy "read" on public.%I for select to authenticated using (public.is_member(clinic_id))', t);
-    execute format('create policy "insert" on public.%I for insert to authenticated with check (public.can_clin(clinic_id))', t);
-    execute format('create policy "update" on public.%I for update to authenticated using (public.can_clin(clinic_id)) with check (public.can_clin(clinic_id))', t);
-    execute format('create policy "delete" on public.%I for delete to authenticated using (public.can_clin(clinic_id))', t);
+    execute format('create policy "read" on public.%I for select to authenticated using (private.is_member(clinic_id))', t);
+    execute format('create policy "insert" on public.%I for insert to authenticated with check (private.can_clin(clinic_id))', t);
+    execute format('create policy "update" on public.%I for update to authenticated using (private.can_clin(clinic_id)) with check (private.can_clin(clinic_id))', t);
+    execute format('create policy "delete" on public.%I for delete to authenticated using (private.can_clin(clinic_id))', t);
   end loop;
 end $$;
 
 alter table public.audit_log enable row level security;
-create policy "read log" on public.audit_log for select to authenticated using (public.is_member(clinic_id));
+create policy "read log" on public.audit_log for select to authenticated using (private.is_member(clinic_id));
 create policy "write log" on public.audit_log for insert to authenticated
-  with check (public.is_member(clinic_id) and user_id = auth.uid());
+  with check (private.is_member(clinic_id) and user_id = auth.uid());
 
 -- ---------- заявки с лендинга ----------
 -- Писать может кто угодно (форма на сайте), читать — только из панели Supabase.

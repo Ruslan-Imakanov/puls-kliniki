@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Пульс клиники</title>
+<meta name="description" content="Управленческий учёт для частной клиники: прибыль, деньги, долги, загрузка врачей и кабинетов.">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=Unbounded:wght@500;600&display=swap">
@@ -11,7 +13,8 @@
 </head>
 <body>
 <!--BODY-->
-<div class="app">
+<div id="auth" class="auth" hidden></div>
+<div class="app" hidden>
   <aside class="side">
     <div class="brand">
       <svg class="brand-mark" width="30" height="30" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8"/><path d="M5 17h5l2.5-6 4 11 3-8 1.5 3H27"/></svg>
@@ -25,7 +28,7 @@
   </aside>
   <div class="main">
     <header class="top">
-      <div class="top-title"><h1 id="pageTitle">Обзор</h1><span id="modeBadge"></span></div>
+      <div class="top-title"><h1 id="pageTitle">Обзор</h1><span id="modeBadge"></span><span id="syncState" class="sync" aria-live="polite"></span></div>
       <div id="period" class="period"></div>
       <button type="button" id="addOp" class="btn primary add-op"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Операция</button>
     </header>

@@ -5,6 +5,7 @@ import { GROUPS, TAGS, RES_KINDS, CP_KINDS, PAY_SCHEMES } from './model.js';
 import { pageHead, seg, empty, pill, statusPill, rerender, go, months as periodMonths } from './ui.js';
 import { loadXLSX, downloadXlsx, sheetsAll, xlName } from './export.js';
 import { completeMonths } from './calc.js';
+import { ROLES, myEmail, myRole, team, invite, revokeInvite, setRole, removeMember, signOut, switchClinic } from './cloud.js';
 
 // ================= ЗАГРУЗКА =================
 const F = (k, label, syn, req = false) => ({ k, label, syn, req });
@@ -330,30 +331,36 @@ export function viewSettings(el) {
     ['marginFloor', 'Минимальная маржа услуги, %', 'pct', 'Ниже — услуга подсвечивается'], ['acquiringPct', 'Комиссия эквайринга, %', 'pct', 'Для себестоимости услуг'],
     ['amortMonths', 'Срок службы оборудования по умолчанию, мес.', 'num', 'Для амортизации в ОПиУ'], ['visitsPerYear', 'Визитов пациента в год', 'num', 'Для LTV'], ['ltvYears', 'Лет пациент с клиникой', 'num', 'Для LTV']];
   const sizeKb = Math.round(JSON.stringify(s).length / 1024);
+  const cloud = store.mode === 'cloud', canWipe = !cloud || myRole() === 'owner';
   el.innerHTML = pageHead('settings') + `
   <section class="card"><div class="card-head"><h2>Параметры расчётов</h2></div>
     <div class="form-grid three">${P.map(([k, l, t, hint]) => `<label class="f">${esc(l)}${hint ? ` <small>${esc(hint)}</small>` : ''}<input data-set="${k}" data-t="${t}" ${t !== 'text' ? 'inputmode="decimal"' : ''} value="${esc(t === 'pct' ? num((st[k] || 0) * 100, 1) : st[k] ?? '')}"></label>`).join('')}</div></section>
+  ${cloud ? `<section class="card"><div class="card-head"><h2>Команда и доступ</h2><span class="muted small">вы: ${esc(myEmail())} · ${esc(ROLES[myRole()] || '')}</span></div>
+    <div id="teamBox"><p class="muted">Загружаю…</p></div>
+    <div class="row-actions"><button class="btn ghost" id="swClinic">Сменить клинику</button><button class="btn ghost" id="signOut">Выйти</button></div>
+  </section>` : ''}
   <section class="card"><div class="card-head"><h2>Данные</h2></div>
     <div class="kv-grid">
       <div><span>Режим</span><b>${store.mode === 'demo' ? 'демо-данные (выдуманные)' : 'рабочие данные'}</b></div>
-      <div><span>Хранятся</span><b>в этом браузере</b></div>
+      <div><span>Хранятся</span><b>${cloud ? 'в защищённой базе (Supabase, Франкфурт)' : 'в этом браузере'}</b></div>
       <div><span>Операций</span><b>${money(s.ops.length)}</b></div>
       <div><span>Объём</span><b>${sizeKb} КБ</b></div>
     </div>
-    <p class="note">Сейчас данные лежат только в этом браузере на этом устройстве. Регулярно сохраняйте резервную копию. Для работы команды (владелец, бухгалтер, администраторы) данные переносятся в защищённую базу с входом по ролям — структура уже готова.</p>
+    <p class="note">${cloud ? 'Данные клиники хранятся в базе и доступны только участникам вашей команды — по ролям. Резервную копию можно скачать в любой момент.'
+      : 'Сейчас данные лежат только в этом браузере на этом устройстве. Регулярно сохраняйте резервную копию. Чтобы работать командой и с любого устройства — <a href="app.html">войдите или зарегистрируйте клинику</a>.'}</p>
     <div class="row-actions">
       <button class="btn primary" id="xlAll">Скачать всё в Excel</button>
       <button class="btn ghost" id="bkShow">Резервная копия</button>
-      <label class="btn ghost" for="bkFile">Восстановить из файла</label><input type="file" id="bkFile" accept=".json,application/json" hidden>
+      ${canWipe ? `<label class="btn ghost" for="bkFile">Восстановить из файла</label><input type="file" id="bkFile" accept=".json,application/json" hidden>
       <button class="btn ghost" id="bkPaste">Восстановить из текста</button>
       <button class="btn ghost" id="demo" data-confirm data-confirm-text="Заменить всё демо-данными?">Загрузить демо-данные</button>
-      <button class="btn danger" id="wipe" data-confirm data-confirm-text="Удалить все данные? Нажмите ещё раз">Начать с чистого листа</button>
+      <button class="btn danger" id="wipe" data-confirm data-confirm-text="Удалить все данные? Нажмите ещё раз">Начать с чистого листа</button>` : ''}
     </div>
     <div id="bkBox"></div>
   </section>
   <section class="card"><div class="card-head"><h2>Журнал изменений</h2><span class="muted small">последние ${Math.min(100, s.log.length)} из ${s.log.length}</span></div>
     ${s.log.length ? `<div class="tw"><table><thead><tr><th>Когда</th><th>Действие</th><th>Что изменилось</th></tr></thead><tbody>${s.log.slice(0, 100).map(l => `<tr><td class="nowrap">${fmtDate(l.t.slice(0, 10))} ${l.t.slice(11, 16)}</td><td>${esc(l.action)}</td><td class="wrap">${esc(l.text)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="muted">Изменений пока нет.</p>'}
-    <p class="note">После подключения базы в журнале будет видно, кто из сотрудников внёс изменение.</p>
+    ${cloud ? '' : '<p class="note">В облачном режиме в журнале видно, кто из сотрудников внёс изменение.</p>'}
   </section>`;
   $$('[data-set]', el).forEach(inp => inp.onchange = () => {
     const k = inp.dataset.set, t = inp.dataset.t;
@@ -362,7 +369,6 @@ export function viewSettings(el) {
     if (t === 'pct') v = v / 100;
     st[k] = v;
     commit('Настройки', `${k} = ${inp.value}`, { silent: k !== 'clinicName' && k !== 'currency' });
-    if (k === 'currency' || k === 'clinicName') location.reload();
   });
   $('#xlAll').onclick = async e => {
     const b = e.currentTarget, ms = periodMonths(), full = completeMonths(s), pm = full[full.length - 1] || ms[ms.length - 1];
@@ -370,16 +376,55 @@ export function viewSettings(el) {
     try { await downloadXlsx(xlName('все отчёты', ms), sheetsAll(s, ms, pm, [pm])); } finally { b.disabled = false; }
   };
   $('#bkShow').onclick = () => {
-    $('#bkBox').innerHTML = `<p class="muted small">Скопируйте текст и сохраните в файл (например, в Блокноте как backup.json) или отправьте себе на почту.</p><textarea id="bkText" rows="6" readonly>${esc(exportJSON())}</textarea><button class="btn small primary" id="bkCopy">Скопировать</button>`;
-    $('#bkCopy').onclick = () => copyText($('#bkText').value, $('#bkText'));
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([exportJSON()], { type: 'application/json' }));
+    a.download = `Пульс клиники — резервная копия ${today()}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    toast('Резервная копия сохранена файлом');
   };
-  $('#bkPaste').onclick = () => {
-    $('#bkBox').innerHTML = `<textarea id="bkIn" rows="6" placeholder="Вставьте текст резервной копии"></textarea><button class="btn small primary" id="bkRestore">Восстановить</button>`;
-    $('#bkRestore').onclick = () => restore($('#bkIn').value);
-  };
-  $('#bkFile').onchange = async e => { const f = e.target.files[0]; if (f) restore(await f.text()); };
-  $('#demo').addEventListener('click', e => { if (e.currentTarget.classList.contains('armed')) { resetDemo(); toast('Загружены демо-данные'); } });
-  $('#wipe').addEventListener('click', e => { if (e.currentTarget.classList.contains('armed')) { clearAll(); toast('Данные очищены. Начните со справочников или загрузки из Excel.'); go('refs'); } });
+  if (canWipe) {
+    $('#bkPaste').onclick = () => {
+      $('#bkBox').innerHTML = `<textarea id="bkIn" rows="6" placeholder="Вставьте текст резервной копии"></textarea><button class="btn small primary" id="bkRestore">Восстановить</button>`;
+      $('#bkRestore').onclick = () => restore($('#bkIn').value);
+    };
+    $('#bkFile').onchange = async e => { const f = e.target.files[0]; if (f) restore(await f.text()); };
+    $('#demo').addEventListener('click', e => { if (e.currentTarget.classList.contains('armed')) { resetDemo(); toast('Загружены демо-данные'); } });
+    $('#wipe').addEventListener('click', e => { if (e.currentTarget.classList.contains('armed')) { clearAll(); toast('Данные очищены. Начните со справочников или загрузки из Excel.'); go('refs'); } });
+  }
+  if (cloud) {
+    $('#swClinic').onclick = () => switchClinic();
+    $('#signOut').onclick = () => signOut();
+    renderTeam();
+  }
+}
+// ---------- команда (облачный режим) ----------
+async function renderTeam() {
+  const box = $('#teamBox');
+  if (!box) return;
+  let T;
+  try { T = await team(); } catch (e) { box.innerHTML = `<p class="form-err">Не удалось загрузить команду: ${esc(e.message)}</p>`; return; }
+  const owner = T.role === 'owner';
+  const roleSel = (uid, r) => `<select data-role="${uid}">${Object.entries(ROLES).map(([k, l]) => opt(k, l, r)).join('')}</select>`;
+  box.innerHTML = `<div class="tw"><table class="team"><thead><tr><th>Почта</th><th>Роль</th><th>В команде с</th><th></th></tr></thead><tbody>
+    ${T.members.map(m => `<tr><td>${esc(m.email || '—')}${m.user_id === T.me ? ' <span class="pill info">вы</span>' : ''}</td>
+      <td>${owner && m.user_id !== T.me ? roleSel(m.user_id, m.role) : esc(ROLES[m.role])}</td><td>${fmtDate(m.created_at.slice(0, 10))}</td>
+      <td class="row-actions">${owner && m.user_id !== T.me ? `<button class="btn small ghost danger" data-rm="${m.user_id}" data-confirm data-confirm-text="Убрать из команды?">Убрать</button>` : ''}</td></tr>`).join('')}
+    ${T.invites.map(i => `<tr class="muted"><td>${esc(i.email)} <span class="pill warn">приглашён</span></td><td>${esc(ROLES[i.role])}</td><td>${fmtDate(i.created_at.slice(0, 10))}</td><td class="row-actions"><button class="btn small ghost" data-revoke="${esc(i.email)}">Отозвать</button></td></tr>`).join('')}
+  </tbody></table></div>
+  ${owner ? `<form class="invite-row" id="invForm" novalidate><label class="f-inline grow"><span>Пригласить по почте</span><input type="email" name="email" placeholder="buh@clinic.kz" required></label>
+    <label class="f-inline"><span>Роль</span><select name="role">${['accountant', 'manager', 'viewer', 'owner'].map(k => opt(k, ROLES[k], 'accountant')).join('')}</select></label>
+    <button class="btn primary" type="submit">Пригласить</button></form>
+  <p class="note">Сотрудник регистрируется на эту почту по ссылке <b>${esc(location.origin + location.pathname)}</b> и подтверждает её — клиника появится у него автоматически. Роли: <b>владелец</b> — всё, включая команду; <b>бухгалтер</b> — все данные, кроме команды и настроек; <b>управляющий</b> — врачи, часы, услуги, маркетинг, склад, финансы только просмотр; <b>просмотр</b> — только смотреть.</p>` : ''}`;
+  $$('[data-role]', box).forEach(sel => sel.onchange = async () => { try { await setRole(sel.dataset.role, sel.value); toast('Роль изменена'); } catch (e) { toast(e.message, 'warn'); } renderTeam(); });
+  $$('[data-rm]', box).forEach(b => b.addEventListener('click', async () => { if (!b.classList.contains('armed')) return; try { await removeMember(b.dataset.rm); toast('Сотрудник убран из команды'); } catch (e) { toast(e.message, 'warn'); } renderTeam(); }));
+  $$('[data-revoke]', box).forEach(b => b.onclick = async () => { try { await revokeInvite(b.dataset.revoke); } catch (e) { toast(e.message, 'warn'); } renderTeam(); });
+  const f = $('#invForm');
+  f && (f.onsubmit = async e => {
+    e.preventDefault();
+    try { await invite(f.email.value, f.role.value); toast('Приглашение создано — сообщите сотруднику адрес программы'); renderTeam(); }
+    catch (er) { toast(er.message, 'warn'); }
+  });
 }
 function restore(text) {
   try { importJSON(text); toast('Данные восстановлены'); } catch (e) { toast('Не получилось: ' + (e.message || 'файл повреждён'), 'warn'); }

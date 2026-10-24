@@ -52,13 +52,13 @@ def main():
     mods, order = {}, []
     load('app', mods, order)
     js = '\n'.join(mods[n] for n in order)
-    html = (ROOT / 'index.html').read_text(encoding='utf-8')
+    html = (ROOT / 'app.html').read_text(encoding='utf-8')
     body = html.split('<!--BODY-->')[1].split('<!--/BODY-->')[0].strip()
     title = re.search(r'<title>(.*?)</title>', html).group(1)
     fonts = re.search(r'<link rel="stylesheet" href="https://fonts[^>]+>', html).group(0)
     css = (ROOT / 'styles.css').read_text(encoding='utf-8')
     page = (f'<title>{title}</title>\n<meta name="claude:viewport-fit-sides" content="cover">\n{fonts}\n'
-            f'<style>\n{css}\n</style>\n{body}\n<script type="module">\n{js}\n</script>\n')
+            f'<style>\n{css}\n</style>\n{body}\n<script>window.PULSE_DEMO_ONLY = 1;</script>\n<script type="module">\n{js}\n</script>\n')
     if standalone:
         page = ('<!doctype html>\n<html lang="ru">\n<head>\n<meta charset="utf-8">\n'
                 '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n'

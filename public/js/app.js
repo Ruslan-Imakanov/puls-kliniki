@@ -1,13 +1,14 @@
 // Точка входа: загрузка данных, оболочка, регистрация разделов.
 import { $, setCurrency } from './util.js';
-import { load, store, onChange } from './store.js';
+import { load, store, onChange, hooks } from './store.js';
+import { cloudBoot } from './cloud.js';
 import { buildShell, registerViews, initPeriod, render, rerender } from './ui.js';
 import { viewOverview, viewOps, viewPnl, viewCash, viewBudget, viewDebts } from './views-finance.js';
 import { viewCapacity, viewDoctors, viewServices, viewMarketing, viewStock } from './views-clinic.js';
 import { viewImport, viewRefs, viewSettings } from './views-data.js';
 
-function boot() {
-  load();
+function start() {
+  document.querySelector('.app').hidden = false;
   setCurrency(store.s.settings.currency);
   buildShell();
   registerViews({
@@ -18,7 +19,11 @@ function boot() {
   initPeriod();
   const name = () => { $('#clinicName').textContent = store.s.settings.clinicName || ''; };
   name();
-  onChange(() => { setCurrency(store.s.settings.currency); name(); rerender(); });
+  const changed = () => { setCurrency(store.s.settings.currency); name(); rerender(); };
+  onChange(changed);
+  hooks.changed = changed;
   render();
 }
-boot();
+// Демо — данные в браузере, без входа. Иначе — вход и данные клиники в базе.
+const demo = window.PULSE_DEMO_ONLY || new URLSearchParams(location.search).has('demo');
+if (demo) { load(); start(); } else cloudBoot(start);
