@@ -127,7 +127,13 @@
 
 <section class="sec" style="padding-top:0" id="video">
   <div class="wrap video-grid">
-    <video src="media/promo.mp4" poster="img/promo-poster.webp" controls playsinline preload="none"></video>
+    <div class="vcol">
+      <div class="vbox">
+        <video id="promo" poster="img/promo-poster.webp" playsinline preload="none"></video>
+        <button class="vplay" id="vplay" type="button" aria-label="Смотреть ролик"><span aria-hidden="true"></span><small id="vprog">Смотреть · 46 секунд</small></button>
+      </div>
+      <a class="vdl" href="media/promo.mp4" download="Пульс клиники — ролик.mp4">Скачать ролик</a>
+    </div>
     <div class="video-text">
       <span class="eyebrow">Меньше минуты</span><h2>Что умеет «Пульс клиники»</h2>
       <p class="lead">Короткий ролик о главном. Полный разбор каждого раздела с озвучкой — 15 минут, пришлём вместе с ответом на заявку.</p>
@@ -236,6 +242,30 @@ document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
   document.getElementById('shotImg').alt = t.textContent;
   document.getElementById('shotCap').textContent = CAPS[t.dataset.shot];
 });
+// Ролик качается целиком и играет из памяти: Cloudflare отдаёт файлы без частичной загрузки (Range),
+// а Safari на iPhone без неё не запускает <video src>. Если загрузка не удалась — обычная ссылка на файл.
+document.getElementById('vplay').addEventListener('click', async e => {
+  const btn = e.currentTarget, v = document.getElementById('promo'), prog = document.getElementById('vprog');
+  btn.disabled = true; prog.textContent = 'Загрузка…';
+  try {
+    const r = await fetch('media/promo.mp4');
+    if (!r.ok) throw new Error(r.status);
+    const total = +r.headers.get('content-length') || 0, parts = [];
+    if (r.body && r.body.getReader) {
+      const rd = r.body.getReader(); let got = 0;
+      for (;;) {
+        const { done, value } = await rd.read();
+        if (done) break;
+        parts.push(value); got += value.length;
+        if (total) prog.textContent = 'Загрузка ' + Math.min(99, Math.round(got / total * 100)) + '%';
+      }
+    } else parts.push(await r.arrayBuffer());
+    v.src = URL.createObjectURL(new Blob(parts, { type: 'video/mp4' }));
+  } catch (err) { v.src = 'media/promo.mp4'; }
+  v.controls = true; btn.hidden = true;
+  v.play().catch(() => {}); // если браузер не дал запустить сам — у ролика уже есть кнопка «плей»
+});
+
 let plan = '';
 document.querySelectorAll('[data-plan]').forEach(a => a.addEventListener('click', () => { plan = a.dataset.plan; }));
 const form = document.getElementById('leadForm'), msg = document.getElementById('leadMsg');
