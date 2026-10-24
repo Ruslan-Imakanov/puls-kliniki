@@ -5,6 +5,7 @@ import { GROUPS } from './model.js';
 import { ctx, pnl, cashflow, balances, debts, AGING, cashForecast, revenueForecast, planFact, breakEven, capacity, alerts, avgCheck, spanMonths } from './calc.js';
 import { chartSlot, hbars, meter } from './charts.js';
 import { pageHead, tile, tiles, pill, statusPill, seg, empty, monthPicker, openOpForm, go, rerender, colorFor, deltaPct, icon } from './ui.js';
+import { xlButton, bindXl, downloadXlsx, xlName, sheetsOps, sheetsPnl, sheetsCash, sheetsBudget, sheetsDebts } from './export.js';
 
 const full = ms => { const f = ms.filter(m => !isPartialMonth(m)); return f.length ? f : ms; };
 const mHead = m => `${monShort(m)} ${m.slice(2, 4)}${isPartialMonth(m) ? '<sup title="месяц ещё идёт">◐</sup>' : ''}`;
@@ -104,7 +105,7 @@ export function viewOps(el, months, params) {
   const fsel = (k, label, options) => `<label class="f-inline"><span>${label}</span><select data-f="${k}">${opt('', 'Все', opsF[k])}${options}</select></label>`;
   const catOpts = Object.entries(GROUPS).map(([g, gg]) => { const cs = s.categories.filter(c => c.grp === g); return cs.length ? `<optgroup label="${esc(gg.name)}">${cs.map(c => opt(c.id, c.name, opsF.cat)).join('')}</optgroup>` : ''; }).join('');
   const shown = list.slice(0, opsF.limit);
-  el.innerHTML = pageHead('ops', `<button class="btn ghost" id="opsCopy">Скопировать в Excel</button><button class="btn primary" id="opsAdd">${icon('plus', 16)}Добавить</button>`) + `
+  el.innerHTML = pageHead('ops', `${xlButton('Скачать Excel')}<button class="btn primary" id="opsAdd">${icon('plus', 16)}Добавить</button>`) + `
   <section class="card">
     <div class="filters">
       <label class="f-inline grow"><span>Поиск</span><input type="search" id="opsQ" value="${esc(opsF.q)}" placeholder="комментарий, документ, врач, сумма"></label>
@@ -140,8 +141,7 @@ export function viewOps(el, months, params) {
   $$('[data-f]', el).forEach(x => x.onchange = () => { opsF[x.dataset.f] = x.value; opsF.limit = 100; rerender(); });
   const open = tr => { const o = s.ops.find(x => x.id === +tr.dataset.id); if (o) openOpForm(o); };
   $$('tbody tr[data-id]', el).forEach(tr => { tr.onclick = () => open(tr); tr.onkeydown = e => { if (e.key === 'Enter') open(tr); }; });
-  $('#opsCopy').onclick = () => copyText(toCSV([['Дата', 'Дата оплаты', 'Тип', 'Статья', 'Отделение', 'Врач', 'Контрагент', 'Документ', 'Счёт', 'Сумма', 'Отказ', 'Комментарий'],
-    ...list.map(o => [fmtDate(o.date), fmtDate(o.paid), { income: 'доход', expense: 'расход', transfer: 'перевод' }[o.type], C.cat[o.category_id]?.name || '', C.dep[o.department_id]?.name || '', C.doc[o.doctor_id]?.name || '', C.cp[o.counterparty_id]?.name || '', o.doc || '', C.acc[o.account_id]?.name || '', String(o.amount).replace('.', ','), o.rejected || '', o.comment || ''])]));
+  bindXl(el, () => downloadXlsx(xlName('Операции'), sheetsOps(s, list)));
 }
 
 // ================= ОПиУ =================
@@ -183,7 +183,7 @@ export function viewPnl(el, months) {
     }
   });
   const mr = div(L.margin.total, net);
-  el.innerHTML = pageHead('pnl', `<button class="btn ghost" id="pnlAll">${pnlOpen.size ? 'Свернуть статьи' : 'Раскрыть все статьи'}</button>`) + tiles([
+  el.innerHTML = pageHead('pnl', `${xlButton()}<button class="btn ghost" id="pnlAll">${pnlOpen.size ? 'Свернуть статьи' : 'Раскрыть все статьи'}</button>`) + tiles([
     tile('Чистая выручка', compactC(net), `за ${months.length} мес.`, { tip: moneyC(net) }),
     tile('Маржинальная прибыль', compactC(L.margin.total), `${pct(mr)} от выручки`, { tip: moneyC(L.margin.total) }),
     tile('EBITDA', `<span class="${cls(L.ebitda.total)}">${compactC(L.ebitda.total)}</span>`, `${pct(div(L.ebitda.total, net))} от выручки`),
@@ -203,6 +203,7 @@ export function viewPnl(el, months) {
     tr.onclick = t; tr.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); t(); } };
   });
   $$('td.drill', el).forEach(td => td.onclick = () => go('ops', { category_id: +td.dataset.cat, month: td.dataset.m }));
+  bindXl(el, () => downloadXlsx(xlName('Прибыли и убытки', months), sheetsPnl(s, months)));
   $('#pnlAll').onclick = () => { if (pnlOpen.size) pnlOpen.clear(); else struct.forEach(r => pnlOpen.add(r.k)); rerender(); };
 }
 
@@ -236,7 +237,7 @@ export function viewCash(el, months) {
   const actual = lineLabels.map(m => (months.includes(m) && m < curMonth() ? F.close[m] : null));
   const cmIdx = lineLabels.indexOf(curMonth());
   const fcVals = lineLabels.map((m, i) => { const r = fc.rows.find(x => x.m === m); if (r) return r.close; return i === cmIdx - 1 ? actual[i] : null; });
-  el.innerHTML = pageHead('cash', `<button class="btn ghost" id="cashTr">Перевод между счетами</button>`) + tiles([
+  el.innerHTML = pageHead('cash', `${xlButton()}<button class="btn ghost" id="cashTr">Перевод между счетами</button>`) + tiles([
     tile('Остаток на начало периода', compactC(F.opening), monLong(months[0]), { tip: moneyC(F.opening) }),
     tile('Поступило', compactC(F.op_in.total + F.fin_in.total), `в т.ч. кредиты ${compactC(F.fin_in.total)}`),
     tile('Выплачено', compactC(F.op_out.total + F.inv_out.total + F.fin_out.total), `в т.ч. оборудование ${compactC(F.inv_out.total)}`),
@@ -266,6 +267,7 @@ export function viewCash(el, months) {
     tr.onclick = t; tr.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); t(); } };
   });
   $$('td.drill', el).forEach(td => td.onclick = () => go('ops', { category_id: +td.dataset.cat, month: td.dataset.m, by: 'paid' }));
+  bindXl(el, () => downloadXlsx(xlName('Движение денег', months), sheetsCash(s, months)));
   $('#cashTr').onclick = () => openOpForm(null, { type: 'transfer', account_id: s.accounts[0]?.id, to_account_id: s.accounts[1]?.id });
 }
 
@@ -296,7 +298,7 @@ export function viewBudget(el, months) {
       }).join('');
   }).join('');
   const hasPlan = s.budget.some(b => scope.includes(b.month));
-  el.innerHTML = pageHead('budget', edit ? `<button class="btn ghost" id="bFact">План = факт прошлого месяца</button><button class="btn ghost" id="bCopy">Скопировать план прошлого месяца</button><button class="btn ghost danger" id="bClear" data-confirm>Очистить план месяца</button>` : '') + `
+  el.innerHTML = pageHead('budget', xlButton() + (edit ? `<button class="btn ghost" id="bFact">План = факт прошлого месяца</button><button class="btn ghost" id="bCopy">Скопировать план прошлого месяца</button><button class="btn ghost danger" id="bClear" data-confirm>Очистить план месяца</button>` : '')) + `
   <section class="card toolbar">
     ${seg('budMode', [['month', 'Один месяц'], ['period', 'Весь выбранный период']], bud.mode)}
     ${edit ? `<label class="f-inline"><span>Месяц</span>${monthPicker('budMonth', bud.month, list)}</label>` : `<span class="muted">${monLong(months[0])} — ${monLong(months[months.length - 1])}</span>`}
@@ -348,6 +350,7 @@ export function viewBudget(el, months) {
     toast('План заполнен: ' + n + ' статей');
   };
   const setPlan = (cid, v) => { const i = s.budget.findIndex(b => b.month === bud.month && b.category_id === cid); if (i > -1) s.budget[i].amount = v; else s.budget.push({ month: bud.month, category_id: cid, amount: v }); };
+  bindXl(el, () => downloadXlsx(xlName('План-факт', scope), sheetsBudget(s, scope)));
   $('#bFact') && ($('#bFact').onclick = () => fill(null, true));
   $('#bCopy') && ($('#bCopy').onclick = () => fill(null, false));
   $('#bClear') && ($('#bClear').addEventListener('click', e => { if (!e.currentTarget.classList.contains('armed')) return; s.budget = s.budget.filter(b => b.month !== bud.month); commit('Бюджет', 'План очищен: ' + bud.month); toast('План месяца очищен'); }));
@@ -362,7 +365,7 @@ export function viewDebts(el) {
     ${aging.map(r => `<tr><th scope="row">${esc(r.name)} <span class="muted small">${r.n} док.</span></th>${r.b.map((v, i) => `<td class="num ${v && i >= 2 ? 'neg' : ''}">${v ? money(v) : '<span class="muted">·</span>'}</td>`).join('')}<td class="num tot">${money(r.total)}</td></tr>`).join('')}
     <tr class="total"><th scope="row">Всего</th>${AGING.map((_, i) => `<td class="num">${money(sum(aging, r => r.b[i]))}</td>`).join('')}<td class="num tot">${money(rec ? d.recTotal : d.payTotal)}</td></tr>
   </tbody></table></div>` : '';
-  el.innerHTML = pageHead('debts') + `<section class="card toolbar">${seg('dTab', [['rec', 'Нам должны (дебиторка)'], ['pay', 'Мы должны (кредиторка)']], dv.tab)}</section>` +
+  el.innerHTML = pageHead('debts', xlButton()) + `<section class="card toolbar">${seg('dTab', [['rec', 'Нам должны (дебиторка)'], ['pay', 'Мы должны (кредиторка)']], dv.tab)}</section>` +
     (rec ? tiles([
       tile('Клинике должны', compactC(d.recTotal), `${d.rec.length} документов`, { tip: moneyC(d.recTotal) }),
       tile('Просрочено', `<span class="${d.recOverdue ? 'neg' : ''}">${compactC(d.recOverdue)}</span>`, pct(div(d.recOverdue, d.recTotal)) + ' от долга'),
@@ -384,6 +387,7 @@ export function viewDebts(el) {
     </tbody></table></div>` : empty(rec ? 'Долгов перед клиникой нет' : 'Неоплаченных расходов нет', rec ? 'Счета ДМС, фонда и рассрочки появятся здесь, если внести доход со статусом «Не оплачено».' : 'Счета поставщиков с отсрочкой появятся здесь, если внести расход со статусом «Не оплачено».')}
     ${rec ? '<p class="note">Отказ страховой уменьшает выручку в ОПиУ и сумму долга. Частичная оплата делит документ на оплаченную и оставшуюся части.</p>' : ''}
   </section>`;
+  bindXl(el, () => downloadXlsx(xlName('Долги'), sheetsDebts(s)));
   $$('[name=dTab]', el).forEach(r => r.onchange = () => { dv.tab = r.value; rerender(); });
   const find = id => s.ops.find(o => o.id === +id);
   $$('[data-ed]', el).forEach(b => b.onclick = () => openOpForm(find(b.dataset.ed)));

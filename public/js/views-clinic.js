@@ -5,6 +5,7 @@ import { RES_KINDS, PAY_SCHEMES } from './model.js';
 import { ctx, pnl, capacity, doctors, payroll, payCalc, services, marketing, stock, avgCheck, spanMonths } from './calc.js';
 import { chartSlot, sparkline, meter, hbars, heatCell } from './charts.js';
 import { pageHead, tile, tiles, pill, statusPill, seg, empty, monthPicker, go, rerender, colorFor } from './ui.js';
+import { xlButton, noXl, bindXl, downloadXlsx, xlName, sheetsCapacity, sheetsDoctors, sheetsServices, sheetsMarketing, sheetsStock } from './export.js';
 
 const fullM = ms => { const f = ms.filter(m => !isPartialMonth(m)); return f.length ? f : ms; };
 const lastFull = () => addMonths(curMonth(), -1);
@@ -19,7 +20,7 @@ export function viewCapacity(el, months) {
     el.innerHTML = pageHead('capacity') + `<div class="card">${empty('Нет ресурсов', 'Добавьте врачей, кабинеты и оборудование в справочниках — затем вносите доступные и занятые часы.', '<button class="btn primary" data-go="refs">Открыть справочники</button>')}</div>`;
     return;
   }
-  const head = pageHead('capacity') + `<section class="card toolbar">${seg('capTab', [['analysis', 'Анализ загрузки'], ['input', 'Ввод часов и приёмов']], capV.tab)}</section>`;
+  const head = pageHead('capacity', capV.tab === 'input' ? '' : xlButton()) + `<section class="card toolbar">${seg('capTab', [['analysis', 'Анализ загрузки'], ['input', 'Ввод часов и приёмов']], capV.tab)}</section>`;
   if (capV.tab === 'input') return capInput(el, head);
   const cap = capacity(s, months), sl = s.settings;
   const lowU = sl.lowUtil ?? 0.6;
@@ -77,6 +78,7 @@ export function viewCapacity(el, months) {
       <div class="tw"><table class="heatmap"><thead><tr><th>Ресурс</th>${months.map(m => `<th>${monShort(m)}</th>`).join('')}</tr></thead><tbody>
       ${cap.heat.map(h => `<tr><th scope="row">${esc(h.r.name)}</th>${h.cells.map(heatCell).join('')}</tr>`).join('')}</tbody></table></div></section>
   </div>`;
+  bindXl(el, () => downloadXlsx(xlName('Мощность', months), sheetsCapacity(s, months)));
   $$('[name=capTab]', el).forEach(r => r.onchange = () => { capV.tab = r.value; rerender(); });
   const upd = () => { capV.res = +$('#scRes').value; capV.target = Math.min(1, Math.max(0.05, (parseNum($('#scT').value) || 85) / 100)); capV.add = parseNum($('#scAdd').value) || 0; rerender(); };
   $('#scRes') && ['#scRes', '#scT', '#scAdd'].forEach(id => $(id).onchange = upd);
@@ -126,7 +128,7 @@ export function viewDoctors(el, months) {
   if (!docV.month || !list.includes(docV.month)) docV.month = lastFull();
   const pr = payroll(s, docV.month);
   const target = s.settings.targetUtil, lowU = s.settings.lowUtil ?? 0.6;
-  el.innerHTML = pageHead('doctors') + tiles([
+  el.innerHTML = pageHead('doctors', xlButton()) + tiles([
     tile('Выручка врачей', compactC(T.revenue), `${rows.length} врачей`, { tip: moneyC(T.revenue) }),
     tile('Средний чек', moneyC(div(T.revenue, T.visits)), `${money(T.visits)} приёмов`),
     tile('Повторные визиты', pct(div(T.visits - T.first, T.visits)), 'доля повторных приёмов'),
@@ -154,6 +156,7 @@ export function viewDoctors(el, months) {
     <p class="note">«Начислить» создаёт неоплаченные расходы «Зарплата врачей» на последний день месяца для тех, у кого зарплата ещё не внесена. Оплату потом отметьте в разделе «Долги».</p>
   </section>`;
   $$('tr[data-doc]', el).forEach(tr => { const f = () => go('ops', { doctor_id: +tr.dataset.doc }); tr.onclick = f; tr.onkeydown = e => { if (e.key === 'Enter') f(); }; });
+  bindXl(el, () => downloadXlsx(xlName('Врачи и зарплата', months), sheetsDoctors(s, months, docV.month)));
   $('#payM').onchange = e => { docV.month = e.target.value; rerender(); };
   $$('[data-scheme]', el).forEach(b => b.onclick = () => schemeDialog(s.doctors.find(d => d.id === +b.dataset.scheme)));
   $('#payGen').onclick = () => {
@@ -187,7 +190,7 @@ function schemeDialog(d) {
 const svcV = { tab: 'cost', month: null, sort: 'mPct' };
 export function viewServices(el, months) {
   const s = store.s;
-  const head = pageHead('services', `<button class="btn primary" id="svcAdd">Добавить услугу</button>`) + `<section class="card toolbar">${seg('svcTab', [['cost', 'Себестоимость и маржа'], ['sales', 'Объёмы продаж']], svcV.tab)}</section>`;
+  const head = pageHead('services', `${s.services.length && svcV.tab !== 'sales' ? xlButton() : ''}<button class="btn primary" id="svcAdd">Добавить услугу</button>`) + `<section class="card toolbar">${seg('svcTab', [['cost', 'Себестоимость и маржа'], ['sales', 'Объёмы продаж']], svcV.tab)}</section>`;
   if (!s.services.length) { el.innerHTML = head + `<div class="card">${empty('Прайс пуст', 'Добавьте услуги с ценой, длительностью, процентом врача и нормами материалов — программа посчитает себестоимость.')}</div>`; bindSvc(el); return; }
   if (svcV.tab === 'sales') return svcSales(el, head);
   const R = services(s, fullM(months));
@@ -211,6 +214,7 @@ export function viewServices(el, months) {
     <p class="note">Себестоимость = материалы по нормам (цены со склада) + процент врача + эквайринг ${pct(s.settings.acquiringPct, 1)} + накладные за время услуги. ABC: A — услуги, дающие 80% выручки, B — следующие 15%, C — остальные. Нажмите на услугу, чтобы изменить цену, нормы материалов или процент врача.</p>
   </section>`;
   bindSvc(el);
+  bindXl(el, () => downloadXlsx(xlName('Услуги и себестоимость', fullM(months)), sheetsServices(s, fullM(months))));
   $$('[name=svcSort]', el).forEach(r => r.onchange = () => { svcV.sort = r.value; rerender(); });
   $$('tr[data-svc]', el).forEach(tr => { const f = () => serviceDialog(s.services.find(v => v.id === +tr.dataset.svc)); tr.onclick = f; tr.onkeydown = e => { if (e.key === 'Enter') f(); }; });
 }
@@ -288,11 +292,11 @@ const readMats = dlg => [...dlg.querySelectorAll('.mat-row')].map(r => ({ item_i
 const mkV = { tab: 'analysis', month: null };
 export function viewMarketing(el, months) {
   const s = store.s;
-  const head = pageHead('marketing') + `<section class="card toolbar">${seg('mkTab', [['analysis', 'Анализ каналов'], ['input', 'Ввод данных по месяцу']], mkV.tab)}</section>`;
+  const head = pageHead('marketing', mkV.tab === 'input' ? '' : xlButton()) + `<section class="card toolbar">${seg('mkTab', [['analysis', 'Анализ каналов'], ['input', 'Ввод данных по месяцу']], mkV.tab)}</section>`;
   if (mkV.tab === 'input') return mkInput(el, head);
   const L = pnl(s, months), mr = div(L.margin.total, L.net.total), ac = avgCheck(s, months, L);
   const M = marketing(s, months, mr, ac), t = M.total;
-  if (!M.rows.length) { el.innerHTML = head + `<div class="card">${empty('Нет данных по рекламе', 'Внесите по каждому каналу расход, обращения, записи, визиты и новых пациентов — программа посчитает стоимость пациента и окупаемость.', '<button class="btn primary" id="mkGo">Внести данные</button>')}</div>`; $('#mkGo').onclick = () => { mkV.tab = 'input'; rerender(); }; bindMk(el); return; }
+  if (!M.rows.length) { el.innerHTML = noXl(head) + `<div class="card">${empty('Нет данных по рекламе', 'Внесите по каждому каналу расход, обращения, записи, визиты и новых пациентов — программа посчитает стоимость пациента и окупаемость.', '<button class="btn primary" id="mkGo">Внести данные</button>')}</div>`; $('#mkGo').onclick = () => { mkV.tab = 'input'; rerender(); }; bindMk(el); return; }
   const ltvCac = t.cac ? M.ltv / t.cac : null;
   const funnel = [['Обращения', t.leads], ['Записались', t.bookings], ['Пришли', t.visits], ['Новые пациенты', t.new_patients]];
   const byM = months.map(m => { const xs = s.marketing.filter(x => x.month === m); return { spend: sum(xs, x => x.spend), rev: sum(xs, x => x.revenue) }; });
@@ -321,6 +325,7 @@ export function viewMarketing(el, months) {
     <p class="note">ROMI здесь считается только по первым визитам — с учётом повторных визитов канал окупается лучше, это показывает LTV / CAC. Ориентир LTV / CAC — от 3.</p>
   </section>`;
   bindMk(el);
+  bindXl(el, () => downloadXlsx(xlName('Маркетинг', months), sheetsMarketing(s, months)));
 }
 const bindMk = el => $$('[name=mkTab]', el).forEach(r => r.onchange = () => { mkV.tab = r.value; rerender(); });
 function mkInput(el, head) {
@@ -348,7 +353,7 @@ function mkInput(el, head) {
 const stV = { tab: 'stock', item: '' };
 export function viewStock(el) {
   const s = store.s;
-  const head = pageHead('stock', `<button class="btn ghost" id="stNorm">Списать по нормам услуг</button><button class="btn ghost" id="stOut">Расход / списание</button><button class="btn primary" id="stIn">Приход</button>`)
+  const head = pageHead('stock', `${s.items.length ? xlButton() : ''}<button class="btn ghost" id="stNorm">Списать по нормам услуг</button><button class="btn ghost" id="stOut">Расход / списание</button><button class="btn primary" id="stIn">Приход</button>`)
     + `<section class="card toolbar">${seg('stTab', [['stock', 'Остатки'], ['batches', 'Партии и сроки годности'], ['moves', 'Движения']], stV.tab)}</section>`;
   if (!s.items.length) { el.innerHTML = head + `<div class="card">${empty('Номенклатура пуста', 'Добавьте материалы и препараты в справочнике «Номенклатура» — затем вносите приходы и списания.', '<button class="btn primary" data-go="refs">Открыть справочники</button>')}</div>`; bindSt(el); return; }
   const R = stock(s), C = ctx(s);
@@ -382,6 +387,7 @@ export function viewStock(el) {
   }
   el.innerHTML = head + t + body;
   bindSt(el);
+  bindXl(el, () => downloadXlsx(xlName('Склад'), sheetsStock(s)));
   $('#stItem') && ($('#stItem').onchange = e => { stV.item = e.target.value; rerender(); });
   $$('[data-del]', el).forEach(b => b.addEventListener('click', () => { if (!b.classList.contains('armed')) return; remove('stock', +b.dataset.del); commit('Склад', 'Удалено движение'); }));
 }

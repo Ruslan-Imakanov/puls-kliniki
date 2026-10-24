@@ -2,7 +2,9 @@
 import { $, $$, esc, opt, money, moneyC, num, pct, today, ym, fmtDate, toast, openModal, parseNum, parseDate, parseCSV, toCSV, hash, norm, copyText } from './util.js';
 import { store, commit, add, update, remove, usage, resetDemo, clearAll, exportJSON, importJSON, nid } from './store.js';
 import { GROUPS, TAGS, RES_KINDS, CP_KINDS, PAY_SCHEMES } from './model.js';
-import { pageHead, seg, empty, pill, statusPill, rerender, go } from './ui.js';
+import { pageHead, seg, empty, pill, statusPill, rerender, go, months as periodMonths } from './ui.js';
+import { loadXLSX, downloadXlsx, sheetsAll, xlName } from './export.js';
+import { completeMonths } from './calc.js';
 
 // ================= ЗАГРУЗКА =================
 const F = (k, label, syn, req = false) => ({ k, label, syn, req });
@@ -75,15 +77,6 @@ function findHeaderRow(rows, fields) {
     if (hits >= 2) return i;
   }
   return 0;
-}
-function loadXLSX() {
-  if (window.XLSX) return Promise.resolve(window.XLSX);
-  return new Promise((res, rej) => {
-    const sc = document.createElement('script');
-    sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
-    sc.onload = () => res(window.XLSX); sc.onerror = () => rej(new Error('Не удалось загрузить модуль чтения Excel. Сохраните файл как CSV и загрузите его.'));
-    document.head.appendChild(sc);
-  });
 }
 async function readFile(file) {
   if (/\.(xlsx|xlsm|xls|ods)$/i.test(file.name)) {
@@ -349,6 +342,7 @@ export function viewSettings(el) {
     </div>
     <p class="note">Сейчас данные лежат только в этом браузере на этом устройстве. Регулярно сохраняйте резервную копию. Для работы команды (владелец, бухгалтер, администраторы) данные переносятся в защищённую базу с входом по ролям — структура уже готова.</p>
     <div class="row-actions">
+      <button class="btn primary" id="xlAll">Скачать всё в Excel</button>
       <button class="btn ghost" id="bkShow">Резервная копия</button>
       <label class="btn ghost" for="bkFile">Восстановить из файла</label><input type="file" id="bkFile" accept=".json,application/json" hidden>
       <button class="btn ghost" id="bkPaste">Восстановить из текста</button>
@@ -370,6 +364,11 @@ export function viewSettings(el) {
     commit('Настройки', `${k} = ${inp.value}`, { silent: k !== 'clinicName' && k !== 'currency' });
     if (k === 'currency' || k === 'clinicName') location.reload();
   });
+  $('#xlAll').onclick = async e => {
+    const b = e.currentTarget, ms = periodMonths(), full = completeMonths(s), pm = full[full.length - 1] || ms[ms.length - 1];
+    b.disabled = true;
+    try { await downloadXlsx(xlName('все отчёты', ms), sheetsAll(s, ms, pm, [pm])); } finally { b.disabled = false; }
+  };
   $('#bkShow').onclick = () => {
     $('#bkBox').innerHTML = `<p class="muted small">Скопируйте текст и сохраните в файл (например, в Блокноте как backup.json) или отправьте себе на почту.</p><textarea id="bkText" rows="6" readonly>${esc(exportJSON())}</textarea><button class="btn small primary" id="bkCopy">Скопировать</button>`;
     $('#bkCopy').onclick = () => copyText($('#bkText').value, $('#bkText'));
