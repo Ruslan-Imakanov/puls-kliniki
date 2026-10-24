@@ -326,7 +326,7 @@ export function viewRefs(el) {
 // ================= НАСТРОЙКИ =================
 export function viewSettings(el) {
   const s = store.s, st = s.settings;
-  const P = [['clinicName', 'Название клиники', 'text'], ['currency', 'Валюта (знак)', 'text'],
+  const P = [['clinicName', 'Название клиники', 'text'], ['currency', 'Валюта (знак)', 'text', 'Выберите из списка или впишите свою'],
     ['targetUtil', 'Целевая загрузка, %', 'pct', 'От неё считается потенциал выручки'], ['lowUtil', 'Низкая загрузка, %', 'pct', 'Ниже — сигнал на обзоре'],
     ['marginFloor', 'Минимальная маржа услуги, %', 'pct', 'Ниже — услуга подсвечивается'], ['acquiringPct', 'Комиссия эквайринга, %', 'pct', 'Для себестоимости услуг'],
     ['amortMonths', 'Срок службы оборудования по умолчанию, мес.', 'num', 'Для амортизации в ОПиУ'], ['visitsPerYear', 'Визитов пациента в год', 'num', 'Для LTV'], ['ltvYears', 'Лет пациент с клиникой', 'num', 'Для LTV']];
@@ -334,7 +334,8 @@ export function viewSettings(el) {
   const cloud = store.mode === 'cloud', canWipe = !cloud || myRole() === 'owner';
   el.innerHTML = pageHead('settings') + `
   <section class="card"><div class="card-head"><h2>Параметры расчётов</h2></div>
-    <div class="form-grid three">${P.map(([k, l, t, hint]) => `<label class="f">${esc(l)}${hint ? ` <small>${esc(hint)}</small>` : ''}<input data-set="${k}" data-t="${t}" ${t !== 'text' ? 'inputmode="decimal"' : ''} value="${esc(t === 'pct' ? num((st[k] || 0) * 100, 1) : st[k] ?? '')}"></label>`).join('')}</div></section>
+    <datalist id="curList">${[['₸', 'тенге'], ['сўм', 'узбекский сум'], ['$', 'доллар'], ['€', 'евро'], ['₽', 'рубль'], ['сом', 'киргизский сом'], ['₼', 'манат'], ['֏', 'драм'], ['₾', 'лари'], ['Br', 'белорусский рубль'], ['£', 'фунт'], ['AED', 'дирхам ОАЭ']].map(([c, n]) => `<option value="${c}">${n}</option>`).join('')}</datalist>
+    <div class="form-grid three">${P.map(([k, l, t, hint]) => `<label class="f">${esc(l)}${hint ? ` <small>${esc(hint)}</small>` : ''}<input data-set="${k}" data-t="${t}" ${k === 'currency' ? 'list="curList" placeholder="выберите или впишите"' : ''} ${t !== 'text' ? 'inputmode="decimal"' : ''} value="${esc(t === 'pct' ? num((st[k] || 0) * 100, 1) : st[k] ?? '')}"></label>`).join('')}</div></section>
   ${cloud ? `<section class="card"><div class="card-head"><h2>Команда и доступ</h2><span class="muted small">вы: ${esc(myEmail())} · ${esc(ROLES[myRole()] || '')}</span></div>
     <div id="teamBox"><p class="muted">Загружаю…</p></div>
     <div class="row-actions"><button class="btn ghost" id="swClinic">Сменить клинику</button><button class="btn ghost" id="signOut">Выйти</button></div>
