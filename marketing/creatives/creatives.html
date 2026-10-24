@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Пульс клиники — рекламные картинки</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=Unbounded:wght@500;600;700&display=swap">
+<style>
+  /* Каждая картинка — <section class="cr" data-name="…">, рендер ×2 (render_creatives.mjs).
+     Лента 540×675 → 1080×1350, сторис 540×960 → 1080×1920, превью ссылки 600×315 → 1200×630. */
+  * { box-sizing: border-box; margin: 0; }
+  body { background: #222; padding: 20px; display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; font-family: "Golos Text", system-ui, sans-serif; color: #fff; }
+  .cr { position: relative; overflow: hidden; flex: none; background: radial-gradient(420px 360px at 92% 4%, rgba(95, 208, 187, .24), transparent 62%), radial-gradient(460px 400px at 0% 100%, rgba(42, 120, 214, .22), transparent 62%), #0f2b27; }
+  .feed { width: 540px; height: 675px; }
+  .story { width: 540px; height: 960px; }
+  .og { width: 600px; height: 315px; }
+  .acc { color: #5fd0bb; }
+  .lbl { position: absolute; left: 36px; font: 600 13px/1 "Golos Text"; letter-spacing: .14em; text-transform: uppercase; color: #5fd0bb; }
+  .h { position: absolute; left: 36px; right: 36px; font: 600 31px/1.16 "Unbounded", sans-serif; letter-spacing: -.01em; }
+  .story .h { position: static; font-size: 34px; }
+  .story .sub { position: static; }
+  .head { position: absolute; left: 36px; right: 36px; z-index: 5; display: flex; flex-direction: column; align-items: flex-start; gap: 16px; }
+  .head .brand { font-size: 19px; }
+  .sub { position: absolute; left: 36px; right: 36px; font-size: 18px; line-height: 1.4; color: #bfd6d0; }
+  .pulse { position: absolute; left: 0; width: 100%; height: 90px; opacity: .55; }
+  .pulse path { fill: none; stroke: #5fd0bb; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+
+  .phone { position: absolute; width: 318px; height: 670px; border-radius: 44px; background: #081412; padding: 9px; box-shadow: 0 40px 90px rgba(0, 0, 0, .55), 0 0 0 1px rgba(255, 255, 255, .08); transform-origin: 50% 0; }
+  .screen { position: relative; width: 300px; height: 652px; border-radius: 36px; overflow: hidden; background: #eef2f1; }
+  .screen img { position: absolute; left: 0; width: 300px; }
+  .notch { position: absolute; left: 50%; top: 9px; width: 96px; height: 26px; margin-left: -48px; border-radius: 0 0 16px 16px; background: #081412; z-index: 2; }
+  .ring { position: absolute; border: 3px solid #f2a33a; border-radius: 14px; box-shadow: 0 0 0 6px rgba(242, 163, 58, .22); }
+
+  .card { position: absolute; border-radius: 16px; overflow: hidden; background: #fff; box-shadow: 0 30px 80px rgba(0, 0, 0, .5); }
+  .card img { position: absolute; display: block; max-width: none; }
+  .xl-bar { position: relative; z-index: 1; height: 34px; background: #1d6f42; display: flex; align-items: center; gap: 10px; padding: 0 14px; font: 600 14px/1 "Golos Text"; color: #fff; }
+  .xl-bar i { width: 18px; height: 18px; border-radius: 4px; background: #fff; color: #1d6f42; font: 700 12px/18px "Golos Text"; text-align: center; font-style: normal; }
+
+  .badge { position: absolute; z-index: 5; padding: 14px 18px; border-radius: 16px; background: #fff; color: #0f201d; box-shadow: 0 20px 50px rgba(0, 0, 0, .4); }
+  .badge b { display: block; font: 700 28px/1.05 "Unbounded"; color: #0d7a6a; margin-bottom: 6px; white-space: nowrap; }
+  .badge b.warn { color: #c0392b; }
+  .badge b.mono { font: 700 26px/1.1 ui-monospace, "SFMono-Regular", Menlo, monospace; color: #1d6f42; }
+  .badge span { display: block; font-size: 15px; line-height: 1.35; color: #44554f; }
+
+  /* нижняя плашка: бренд слева, призыв справа; под ней затемнение, чтобы картинка «уходила» под неё */
+  .fade { position: absolute; left: 0; right: 0; bottom: 0; z-index: 4; background: linear-gradient(to bottom, rgba(15, 43, 39, 0), #0f2b27 46%); }
+  .bar { position: absolute; left: 36px; right: 36px; z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+  .brand { display: flex; align-items: center; gap: 10px; font: 600 17px/1.1 "Unbounded"; }
+  .brand small { display: block; margin-top: 4px; font: 500 12px/1 "Golos Text"; color: #9fbdb6; letter-spacing: .01em; }
+  .pill { padding: 15px 22px; border-radius: 14px; background: #5fd0bb; color: #06201b; font: 700 17px/1 "Golos Text"; white-space: nowrap; box-shadow: 0 10px 30px rgba(95, 208, 187, .25); }
+  .story .pill { font-size: 20px; padding: 18px 26px; }
+  .ticks { position: absolute; left: 36px; right: 36px; z-index: 5; display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 16px; color: #d4e6e1; }
+  .ticks span::before { content: '✓ '; color: #5fd0bb; font-weight: 700; }
+</style>
+</head>
+<body>
+
+<!-- ===== Лента 4:5 ===== -->
+
+<section class="cr feed" data-name="feed-1-profit">
+  <div class="lbl" style="top:42px">Владельцу частной клиники</div>
+  <div class="h" style="top:66px">Сколько клиника <span class="acc">реально</span> заработала в&nbsp;прошлом месяце?</div>
+  <div class="phone" style="left:236px;top:226px;transform:rotate(-3deg) scale(.9)"><div class="notch"></div><div class="screen">
+    <img src="../promo/img/m-overview-full.jpg" style="top:-115px" alt="">
+    <div class="ring" style="left:151px;top:44px;width:140px;height:96px"></div></div></div>
+  <div class="badge" style="left:28px;top:330px;width:236px"><b>32,7 млн ₸</b><span>чистая прибыль за 12 месяцев — по каждому месяцу и отделению</span></div>
+  <div class="fade" style="height:230px"></div>
+  <div class="ticks" style="bottom:100px"><span>Прибыль</span><span>Деньги</span><span>Долги</span><span>Загрузка</span></div>
+  <div class="bar" style="bottom:34px"><div class="brand">#LOGO#<div>Пульс клиники<small>управленческий учёт</small></div></div><div class="pill">Месяц бесплатно →</div></div>
+</section>
+
+<section class="cr feed" data-name="feed-2-capacity">
+  <div class="lbl" style="top:42px">Загрузка врачей и кабинетов</div>
+  <div class="h" style="top:66px">Пустой кабинет — это <span class="acc">недополученная выручка</span></div>
+  <div class="phone" style="left:-6px;top:226px;transform:rotate(3deg) scale(.9)"><div class="notch"></div><div class="screen">
+    <img src="../promo/img/m-capacity-full.jpg" style="top:-231px" alt="">
+    <div class="ring" style="left:8px;top:135px;width:142px;height:98px"></div></div></div>
+  <div class="badge" style="left:262px;top:300px;width:250px"><b>+69,9 млн ₸</b><span>выручки за год, если довести загрузку врачей до&nbsp;85%</span></div>
+  <div class="sub" style="left:286px;top:440px;font-size:16px;z-index:5">Видно узкое место каждого отделения и потери от неявок</div>
+  <div class="fade" style="height:230px"></div>
+  <div class="ticks" style="bottom:100px"><span>Без замены МИС и 1С</span><span>Подключение за 1–2 недели</span></div>
+  <div class="bar" style="bottom:34px"><div class="brand">#LOGO#<div>Пульс клиники<small>управленческий учёт</small></div></div><div class="pill">Месяц бесплатно →</div></div>
+</section>
+
+<section class="cr feed" data-name="feed-3-services">
+  <div class="lbl" style="top:42px">Себестоимость услуг</div>
+  <div class="h" style="top:66px">Какие услуги <span class="acc">приносят прибыль</span>, а&nbsp;какие работают в&nbsp;ноль</div>
+  <div class="card" style="left:30px;top:236px;width:600px;height:318px;transform:rotate(-3deg);transform-origin:0 0">
+    <img src="../promo/img/d-services.jpg" style="width:620px;left:-113px;top:-84px" alt="">
+    <div class="ring" style="left:4px;top:99px;width:486px;height:26px;border-radius:8px"></div></div>
+  <div class="badge" style="left:36px;top:392px;width:300px"><b class="warn">9%</b><span>маржа «Лечения кариеса»: врач, материалы и&nbsp;накладные съедают почти всю цену</span></div>
+  <div class="fade" style="height:230px"></div>
+  <div class="ticks" style="bottom:100px"><span>Материалы по нормам</span><span>Час кабинета</span><span>ABC-анализ</span></div>
+  <div class="bar" style="bottom:34px"><div class="brand">#LOGO#<div>Пульс клиники<small>управленческий учёт</small></div></div><div class="pill">Месяц бесплатно →</div></div>
+</section>
+
+<!-- ===== Сторис 9:16: текст ниже 130 px сверху; низ (170 px) закрывает интерфейс Instagram — там только картинка ===== -->
+
+<section class="cr story" data-name="story-1-cash">
+  <div class="head" style="top:138px">
+    <div class="brand">#LOGO#<div>Пульс клиники<small>управленческий учёт для клиник</small></div></div>
+    <div class="h">Кассовый разрыв — <span class="acc">видно за&nbsp;3&nbsp;месяца</span></div>
+    <div class="sub">Прогноз остатка по тренду и бюджету: успеете перенести платежи или ускорить оплату долгов</div>
+    <div class="pill">Первый месяц бесплатно</div>
+  </div>
+  <div class="phone" style="left:111px;top:446px;transform:rotate(-2deg)"><div class="notch"></div><div class="screen">
+    <img src="../promo/img/m-cash-full.jpg" style="top:-692px" alt="">
+    <div class="ring" style="left:16px;top:72px;width:268px;height:316px"></div></div></div>
+  <div class="badge" style="left:26px;top:668px;width:230px"><b>3 месяца</b><span>прогноз остатка на&nbsp;счетах вперёд</span></div>
+</section>
+
+<section class="cr story" data-name="story-2-excel">
+  <div class="head" style="top:138px">
+    <div class="brand">#LOGO#<div>Пульс клиники<small>управленческий учёт для клиник</small></div></div>
+    <div class="h">Любой отчёт — <span class="acc">в&nbsp;Excel с&nbsp;формулами</span></div>
+    <div class="sub">Не картинка и не «всё в одной ячейке»: бухгалтер проверит и пересчитает каждую цифру</div>
+    <div class="pill">Первый месяц бесплатно</div>
+  </div>
+  <div class="card" style="left:44px;top:458px;width:452px;height:540px;transform:rotate(2deg)">
+    <div class="xl-bar"><i>X</i>Прибыли и убытки.xlsx</div>
+    <img src="../promo/img/xl-pnl.jpg" style="width:560px;left:-36px;top:-20px" alt=""></div>
+  <div class="badge" style="left:236px;top:708px;width:270px"><b class="mono">=СУММ(C7:C9)</b><span>итоги — формулами, исходные цифры выделены синим</span></div>
+</section>
+
+<!-- ===== Превью ссылки (og:image) ===== -->
+
+<section class="cr og" data-name="og">
+  <div style="position:absolute;left:32px;top:34px;display:flex;align-items:center;gap:12px;font:600 22px/1 Unbounded">#LOGO40#Пульс клиники</div>
+  <div style="position:absolute;left:32px;top:92px;width:250px;font:600 21px/1.22 Unbounded">Управленческий учёт <span class="acc">для частной клиники</span></div>
+  <div style="position:absolute;left:32px;top:190px;width:240px;font-size:14px;line-height:1.45;color:#bfd6d0">Прибыль, деньги, долги, загрузка врачей и себестоимость услуг — в одном окне</div>
+  <div class="pill" style="position:absolute;left:32px;top:252px;padding:11px 16px;font-size:14px">Первый месяц бесплатно</div>
+  <div class="card" style="left:300px;top:44px;width:400px;height:250px;transform:rotate(-4deg);transform-origin:0 0;border-radius:12px">
+    <img src="../../public/img/overview.webp" style="width:400px;left:0;top:0" alt=""></div>
+</section>
+
+<script>
+  const logo = s => `<svg width="${s}" height="${s}" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#5fd0bb"/><path d="M5 17h5l2.5-6 4 11 3-8 1.5 3H27" fill="none" stroke="#0f2b27" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  document.body.innerHTML = document.body.innerHTML.replaceAll('#LOGO40#', logo(40)).replaceAll('#LOGO#', logo(36));
+</script>
+</body>
+</html>

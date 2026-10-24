@@ -7,7 +7,6 @@ import { chartSlot, hbars, meter } from './charts.js';
 import { pageHead, tile, tiles, pill, statusPill, seg, empty, monthPicker, openOpForm, go, rerender, colorFor, deltaPct, icon } from './ui.js';
 import { xlButton, bindXl, downloadXlsx, xlName, sheetsOps, sheetsPnl, sheetsCash, sheetsBudget, sheetsDebts } from './export.js';
 
-const full = ms => { const f = ms.filter(m => !isPartialMonth(m)); return f.length ? f : ms; };
 const mHead = m => `${monShort(m)} ${m.slice(2, 4)}${isPartialMonth(m) ? '<sup title="месяц ещё идёт">◐</sup>' : ''}`;
 const cls = n => (n < 0 ? 'neg' : '');
 
@@ -21,7 +20,7 @@ export function viewOverview(el, months) {
     return;
   }
   const L = pnl(s, months), prev = months.map(m => addMonths(m, -months.length)), Lp = pnl(s, prev);
-  const bal = sum(balances(s), a => a.balance), d = debts(s), cap = capacity(s, full(months));
+  const bal = sum(balances(s), a => a.balance), d = debts(s), cap = capacity(s, months);
   const fc = revenueForecast(s, 3), al = alerts(s, months), ac = avgCheck(s, months, L);
   const expenses = months.map(m => L.variable[m] + L.fixed[m] + L.amort[m] + L.tax[m]);
   const rentab = div(L.profit.total, L.net.total);

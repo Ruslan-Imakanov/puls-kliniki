@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Пульс клиники — промо 9:16</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=Unbounded:wght@500;600;700&display=swap">
+<style>
+  /* Кадр 540×960 (рендер ×2 = 1080×1920). Всё анимируется функцией seek(t) — без CSS-анимаций, кадры детерминированы. */
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: 540px; height: 960px; overflow: hidden; background: #0f2b27; }
+  body { font-family: "Golos Text", system-ui, sans-serif; color: #fff; }
+  .stage { position: absolute; inset: 0; overflow: hidden; background: radial-gradient(520px 420px at 90% 6%, rgba(95, 208, 187, .22), transparent 60%), radial-gradient(500px 420px at 0% 100%, rgba(42, 120, 214, .2), transparent 60%), #0f2b27; }
+  .sc { position: absolute; inset: 0; opacity: 0; }
+  .big { font: 700 44px/1.12 "Unbounded", sans-serif; letter-spacing: -.01em; }
+  .mid { font: 600 31px/1.18 "Unbounded", sans-serif; letter-spacing: -.01em; }
+  .acc { color: #5fd0bb; }
+  .w { display: inline-block; }
+  .cap { position: absolute; left: 36px; right: 36px; top: 78px; }
+  .cap small { display: block; font: 600 14px/1 "Golos Text"; letter-spacing: .14em; text-transform: uppercase; color: #5fd0bb; margin-bottom: 14px; }
+  .pulse { position: absolute; left: 0; right: 0; bottom: 210px; height: 120px; }
+  .pulse path { fill: none; stroke: #5fd0bb; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+  .chip { position: absolute; padding: 12px 18px; border-radius: 14px; background: #143a34; border: 1px solid rgba(95, 208, 187, .28); font: 600 22px/1 "Golos Text"; white-space: nowrap; box-shadow: 0 12px 30px rgba(0, 0, 0, .3); }
+  .logo { position: absolute; left: 50%; top: 330px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 22px; text-align: center; width: 480px; }
+  .logo b { font: 700 40px/1.1 "Unbounded"; }
+  .logo p { font-size: 22px; color: #bfd6d0; line-height: 1.4; }
+  .phone { position: absolute; left: 50%; top: 250px; width: 318px; height: 670px; margin-left: -159px; border-radius: 44px; background: #081412; padding: 9px; box-shadow: 0 40px 90px rgba(0, 0, 0, .55), 0 0 0 1px rgba(255, 255, 255, .08); }
+  .screen { position: relative; width: 300px; height: 652px; border-radius: 36px; overflow: hidden; background: #eef2f1; }
+  .screen img { position: absolute; left: 0; top: 0; width: 300px; }
+  .notch { position: absolute; left: 50%; top: 9px; width: 96px; height: 26px; margin-left: -48px; border-radius: 0 0 16px 16px; background: #081412; z-index: 2; }
+  .ring { position: absolute; border: 3px solid #f2a33a; border-radius: 14px; box-shadow: 0 0 0 6px rgba(242, 163, 58, .22); }
+  .badge { position: absolute; padding: 14px 18px; border-radius: 16px; background: #fff; color: #0f201d; box-shadow: 0 20px 50px rgba(0, 0, 0, .35); }
+  .badge b { display: block; font: 700 34px/1.05 "Unbounded"; color: #0d7a6a; }
+  .badge span { font-size: 15px; color: #44554f; }
+  .card { position: absolute; border-radius: 18px; overflow: hidden; background: #fff; box-shadow: 0 30px 80px rgba(0, 0, 0, .5); }
+  .card img { display: block; width: 100%; }
+  .xl-bar { height: 34px; background: #1d6f42; display: flex; align-items: center; gap: 10px; padding: 0 14px; font: 600 14px/1 "Golos Text"; color: #fff; }
+  .xl-bar i { width: 18px; height: 18px; border-radius: 4px; background: #fff; color: #1d6f42; font: 700 12px/18px "Golos Text"; text-align: center; font-style: normal; }
+  .cta { position: absolute; left: 36px; right: 36px; top: 210px; display: flex; flex-direction: column; gap: 26px; }
+  .btn { align-self: flex-start; padding: 20px 30px; border-radius: 16px; background: #5fd0bb; color: #06201b; font: 700 24px/1 "Golos Text"; }
+  .url { font: 600 21px/1.3 "Golos Text"; color: #bfd6d0; }
+  .ticks { display: flex; flex-direction: column; gap: 10px; font-size: 20px; color: #bfd6d0; }
+  .ticks span::before { content: '✓  '; color: #5fd0bb; font-weight: 700; }
+  .brandbar { position: absolute; left: 36px; bottom: 44px; display: flex; align-items: center; gap: 12px; font: 600 19px/1 "Unbounded"; opacity: .9; }
+  .prog { position: absolute; left: 0; bottom: 0; height: 6px; background: #5fd0bb; }
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+
+  <!-- 1. Вопрос -->
+  <section class="sc" id="s1">
+    <div class="cap" style="top:220px"><small>Владельцу клиники</small><div class="big" id="q1"><span class="w">Сколько</span> <span class="w">ваша</span> <span class="w">клиника</span> <span class="w acc">реально</span> <span class="w acc">заработала</span> <span class="w">в</span> <span class="w">прошлом</span> <span class="w">месяце?</span></div></div>
+    <svg class="pulse" viewBox="0 0 540 120" preserveAspectRatio="none"><path id="pl" d="M0 70 H190 l18 -44 l26 90 l26 -76 l16 30 H540"/></svg>
+  </section>
+
+  <!-- 2. Разрозненные данные -->
+  <section class="sc" id="s2">
+    <div class="cap"><div class="mid">Бухгалтерия, МИС, таблицы, чаты — <span class="acc">а цельной картины нет</span></div></div>
+    <div class="chip" data-x="40" data-y="360" data-r="-6">1С: Бухгалтерия</div>
+    <div class="chip" data-x="300" data-y="330" data-r="5">МИС</div>
+    <div class="chip" data-x="70" data-y="480" data-r="4">Excel «Касса_окт_v3»</div>
+    <div class="chip" data-x="330" data-y="460" data-r="-4">WhatsApp</div>
+    <div class="chip" data-x="40" data-y="600" data-r="-3">Выписка банка</div>
+    <div class="chip" data-x="290" data-y="590" data-r="6">Блокнот</div>
+    <div class="chip" data-x="120" data-y="720" data-r="2">Реестры страховых</div>
+  </section>
+
+  <!-- 3. Логотип -->
+  <section class="sc" id="s3">
+    <div class="logo"><svg id="lg" width="120" height="120" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#5fd0bb"/><path d="M5 17h5l2.5-6 4 11 3-8 1.5 3H27" fill="none" stroke="#0f2b27" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <b>Пульс клиники</b><p>Управленческий учёт для частной клиники — всё в одном окне</p></div>
+  </section>
+
+  <!-- 4–6. Телефон -->
+  <section class="sc" id="s4">
+    <div class="cap" id="pcap"><small id="pcapS">Обзор</small><div class="mid" id="pcapT"></div></div>
+    <div class="phone" id="phone"><div class="notch"></div><div class="screen"><img id="scr" src="img/m-overview-full.jpg" alt=""><div class="ring" id="ring" style="opacity:0"></div></div></div>
+    <div class="badge" id="badge" style="opacity:0"><b id="badgeN"></b><span id="badgeT"></span></div>
+  </section>
+
+  <!-- 7. Себестоимость -->
+  <section class="sc" id="s7">
+    <div class="cap"><small>Услуги</small><div class="mid">Себестоимость и маржа <span class="acc">каждой услуги</span></div></div>
+    <div class="card" id="svcCard" style="left:-40px;top:300px;width:900px"><img src="img/d-services.jpg" alt=""></div>
+    <div class="badge" id="svcBadge" style="left:36px;top:740px;opacity:0"><b>9%</b><span>маржа «Лечения кариеса» — пора пересмотреть цену</span></div>
+  </section>
+
+  <!-- 8. Excel -->
+  <section class="sc" id="s8">
+    <div class="cap"><small>Выгрузка</small><div class="mid">Любой отчёт — <span class="acc">в Excel с формулами</span></div></div>
+    <div class="card" id="xlCard" style="left:40px;top:300px;width:460px;height:520px"><div class="xl-bar"><i>X</i>Пульс клиники — Прибыли и убытки.xlsx</div><img src="img/xl-pnl.jpg" alt="" style="width:720px;max-width:none;margin:-30px 0 0 -30px"></div>
+  </section>
+
+  <!-- 9. Призыв -->
+  <section class="sc" id="s9">
+    <div class="cta"><div class="big">Первый месяц — <span class="acc">бесплатно</span></div>
+      <div class="ticks"><span>Без замены МИС и 1С</span><span>Подключение за 1–2 недели</span><span>Демо — без регистрации</span></div>
+      <div class="btn">Оставить заявку</div>
+      <div class="url">puls-kliniki.imakanovr.workers.dev</div></div>
+  </section>
+
+  <div class="brandbar" id="brandbar"><svg width="34" height="34" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#5fd0bb"/><path d="M5 17h5l2.5-6 4 11 3-8 1.5 3H27" fill="none" stroke="#0f2b27" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>Пульс клиники</div>
+  <div class="prog" id="prog"></div>
+</div>
+<script>
+const TOTAL = 42;
+const E = x => (x <= 0 ? 0 : x >= 1 ? 1 : x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
+const OUT = x => (x <= 0 ? 0 : x >= 1 ? 1 : 1 - Math.pow(1 - x, 3));
+const P = (t, a, b) => Math.max(0, Math.min(1, (t - a) / (b - a)));
+const $ = id => document.getElementById(id);
+const fade = (t, a, b, f = 0.45) => Math.min(OUT(P(t, a, a + f)), 1 - E(P(t, b - f, b)));
+const S = { s1: [0, 4.4], s2: [4.4, 8.6], s3: [8.6, 11.8], s4: [11.8, 27.2], s7: [27.2, 32.4], s8: [32.4, 36.6], s9: [36.6, 42.2] };
+// экраны телефона: картинка, сдвиг (в px картинки шириной 300), рамка, подпись, бейдж
+const k = 300 / 390;
+const PH = [
+  { a: 11.8, b: 17, img: 'img/m-overview-full.jpg', s: 'Обзор', t: 'Прибыль, деньги и долги — <span class="acc">за минуту</span>', y0: 0, y1: 150 * k, ring: [16, 211 * k - 150 * k + 6, 268, 352 * k - 6], badge: ['32,7 млн ₸', 'чистая прибыль за 12 месяцев'] },
+  { a: 17, b: 22.2, img: 'img/m-cash-full.jpg', s: 'Движение денег', t: 'Кассовый разрыв — <span class="acc">видно заранее</span>', y0: 260 * k, y1: 900 * k, ring: [16, 993 * k - 900 * k, 268, 411 * k], badge: ['3 месяца', 'прогноз остатка на счетах'] },
+  { a: 22.2, b: 27.2, img: 'img/m-capacity-full.jpg', s: 'Мощность', t: 'Деньги в <span class="acc">простаивающих кабинетах</span>', y0: 0, y1: 300 * k, ring: [16 * k - 4, (481 - 300) * k - 4, 174 * k + 8, 117 * k + 8], badge: ['+69,9 млн ₸', 'если довести загрузку до 85%'], count: 69.9 },
+];
+let cur = null;
+window.seek = async t => {
+  for (const [id, [a, b]] of Object.entries(S)) $(id).style.opacity = fade(t, a, b);
+  // 1: слова по одному и линия пульса
+  [...$('q1').children].forEach((w, i) => { const p = OUT(P(t, 0.25 + i * 0.22, 0.75 + i * 0.22)); w.style.opacity = p; w.style.transform = `translateY(${(1 - p) * 22}px)`; });
+  const pl = $('pl'), L = 760; pl.style.strokeDasharray = L; pl.style.strokeDashoffset = L * (1 - E(P(t, 0.4, 3.2)));
+  // 2: фрагменты разлетаются по экрану, затем стягиваются к центру
+  document.querySelectorAll('#s2 .chip').forEach((c, i) => {
+    const pin = OUT(P(t, 4.6 + i * 0.16, 5.2 + i * 0.16)), pc = E(P(t, 7.4, 8.5));
+    const x = +c.dataset.x, y = +c.dataset.y, cx = 270 - c.offsetWidth / 2, cy = 540;
+    c.style.opacity = pin * (1 - pc * 0.9);
+    c.style.transform = `translate(${x + (cx - x) * pc}px, ${y + (cy - y) * pc + (1 - pin) * 30}px) rotate(${+c.dataset.r * (1 - pc)}deg) scale(${1 - pc * 0.5})`;
+    c.style.left = 0; c.style.top = 0;
+  });
+  // 3: логотип
+  const lp = OUT(P(t, 8.7, 9.5)); $('lg').style.transform = `scale(${0.6 + 0.4 * lp}) rotate(${(1 - lp) * -12}deg)`;
+  $('s3').querySelector('b').style.opacity = OUT(P(t, 9.2, 9.8)); $('s3').querySelector('p').style.opacity = OUT(P(t, 9.6, 10.3));
+  // 4–6: телефон
+  const ph = PH.find(x => t >= x.a && t < x.b) || (t < PH[0].a ? PH[0] : PH[PH.length - 1]);
+  if (cur !== ph) {
+    cur = ph; const img = $('scr');
+    if (!img.src.endsWith(ph.img)) { img.src = ph.img; await img.decode().catch(() => {}); }
+    $('pcapS').textContent = ph.s; $('pcapT').innerHTML = ph.t;
+  }
+  const lt = P(t, ph.a, ph.b), sw = fade(t, ph.a, ph.b, 0.35);
+  $('scr').style.transform = `translateY(${-(ph.y0 + (ph.y1 - ph.y0) * E(P(t, ph.a + 0.5, ph.a + 2.4)))}px)`;
+  $('phone').style.transform = `translateY(${(1 - OUT(P(t, 11.8, 12.6))) * 120}px) rotate(${-2 + Math.sin(t * 0.6) * 0.6}deg)`;
+  $('pcap').style.opacity = sw;
+  const rp = OUT(P(t, ph.a + 2.5, ph.a + 3)), rq = 1 - E(P(t, ph.b - 0.5, ph.b - 0.2));
+  Object.assign($('ring').style, { left: ph.ring[0] + 'px', top: ph.ring[1] + 'px', width: ph.ring[2] + 'px', height: ph.ring[3] + 'px', opacity: rp * rq });
+  const bp = OUT(P(t, ph.a + 2.9, ph.a + 3.4)), bq = 1 - E(P(t, ph.b - 0.45, ph.b - 0.1));
+  const bn = ph.count ? '+' + (ph.count * E(P(t, ph.a + 2.9, ph.a + 4.2))).toFixed(1).replace('.', ',') + ' млн ₸' : ph.badge[0];
+  $('badgeN').textContent = bn; $('badgeT').textContent = ph.badge[1];
+  Object.assign($('badge').style, { left: '250px', top: '760px', opacity: bp * bq, transform: `translateY(${(1 - bp) * 24}px)` });
+  // 7: себестоимость — карточка медленно едет
+  const sv = E(P(t, 27.2, 32.4)); $('svcCard').style.transform = `translate(${-sv * 300}px, ${-sv * 30}px) rotate(-3deg)`;
+  const sb = OUT(P(t, 29, 29.6)); $('svcBadge').style.opacity = sb * (1 - E(P(t, 31.8, 32.2))); $('svcBadge').style.transform = `translateY(${(1 - sb) * 24}px)`;
+  // 8: Excel
+  const xp = OUT(P(t, 32.5, 33.3)); $('xlCard').style.transform = `translateY(${(1 - xp) * 80}px) rotate(${2 - 2 * xp}deg)`;
+  // 9: призыв
+  document.querySelectorAll('#s9 .cta > *').forEach((e, i) => { const p = OUT(P(t, 36.8 + i * 0.35, 37.4 + i * 0.35)); e.style.opacity = p; e.style.transform = `translateY(${(1 - p) * 26}px)`; });
+  const pulseBtn = 1 + Math.max(0, Math.sin((t - 38.5) * 3.2)) * 0.04 * (t > 38.5 ? 1 : 0); document.querySelector('#s9 .btn').style.scale = pulseBtn;
+  $('brandbar').style.opacity = t > 27.2 && t < 36.6 ? 0.9 * fade(t, 27.2, 36.6) : 0;
+  $('prog').style.width = (540 * Math.min(1, t / TOTAL)) + 'px';
+  await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+};
+window.TOTAL = TOTAL;
+</script>
+</body>
+</html>
