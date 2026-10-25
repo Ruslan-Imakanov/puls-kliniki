@@ -74,7 +74,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const dt = iso => iso ? iso.slice(8, 10) + '.' + iso.slice(5, 7) + '.' + iso.slice(2, 4) : '—';
 const kzt = n => Number(n || 0).toLocaleString('ru-RU') + ' ₸';
 const sb = window.supabase.createClient(CLOUD.url, CLOUD.key, { auth: { persistSession: true, autoRefreshToken: true, storageKey: 'pulse-auth' } });
-let rows = [], filter = 'all';
+let rows = [], leads = [], filter = 'all';
 
 const say = t => { const e = document.createElement('div'); e.className = 'toast'; e.textContent = t; document.body.append(e); setTimeout(() => e.remove(), 3200); };
 const msg = html => { root.innerHTML = `<div class="msg">${html}</div>`; };
@@ -89,7 +89,7 @@ async function boot() {
   await load();
 }
 async function load() {
-  try { rows = await rpc('admin_clinics'); } catch (e) { return msg('<h2>Не удалось загрузить</h2><p>' + esc(e.message) + '</p>'); }
+  try { [rows, leads] = await Promise.all([rpc('admin_clinics'), rpc('admin_leads')]); } catch (e) { return msg('<h2>Не удалось загрузить</h2><p>' + esc(e.message) + '</p>'); }
   draw();
 }
 
@@ -105,6 +105,7 @@ function draw() {
     <div class="tile"><span>На пробном периоде</span><b>${cnt(r => r.state === 'trial')}</b></div>
     <div class="tile"><span>Нужно напомнить</span><b>${cnt(needs)}</b></div>
     <div class="tile"><span>Получено всего</span><b>${kzt(paid)}</b></div>
+    <div class="tile"><span>Заявок за 7 дней</span><b>${leads.filter(l => Date.now() - new Date(l.created_at) < 7 * 864e5).length}</b></div>
   </div>
   <div class="bar">${[['all', 'Все'], ['soon', 'Нужно напомнить'], ['trial', 'Пробные'], ['active', 'Оплаченные'], ['expired', 'Просроченные']]
     .map(([k, l]) => `<button class="chip" data-f="${k}" aria-pressed="${filter === k}">${l}</button>`).join('')}
@@ -122,6 +123,16 @@ function draw() {
     <td data-l="Последняя оплата">${r.last_payment ? dt(r.last_payment) : '—'}</td>
     <td><div class="acts"><button class="btn small primary" data-x="${r.id}">Продлить</button><button class="btn small" data-h="${r.id}">История</button><button class="btn small" data-e="${r.id}">Изменить</button>${r.owner_email ? `<a class="btn small" href="${mail(r)}">Написать</a>` : ''}</div></td>
   </tr>`).join('') : '<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:26px">Здесь пока пусто</td></tr>'}
+  </tbody></table></div>
+  <h2 style="font:600 18px Unbounded,sans-serif;margin:28px 0 12px">Заявки с сайта</h2>
+  <div class="wrap"><table><thead><tr><th>Когда</th><th>Имя</th><th>Телефон</th><th>Клиника</th><th>Город</th><th>Размер</th><th>Откуда</th><th>Комментарий</th></tr></thead><tbody>
+  ${leads.length ? leads.map(l => `<tr>
+    <td data-l="Когда">${dt(l.created_at)} ${esc(new Date(l.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }))}</td>
+    <td class="nm">${esc(l.name)}</td>
+    <td data-l="Телефон"><a href="https://wa.me/${esc(l.phone.replace(/\D/g, '').replace(/^8(?=\d{10}$)/, '7'))}" target="_blank" rel="noopener">${esc(l.phone)}</a></td>
+    <td data-l="Клиника">${esc(l.clinic || '—')}</td><td data-l="Город">${esc(l.city || '—')}</td><td data-l="Размер">${esc(l.size || '—')}</td>
+    <td data-l="Откуда" class="sub">${esc(l.source || '—')}</td><td data-l="Комментарий">${esc(l.message || '')}</td>
+  </tr>`).join('') : '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:26px">Заявок пока нет</td></tr>'}
   </tbody></table></div>`;
   root.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { filter = b.dataset.f; draw(); });
   $('#reload').onclick = load;

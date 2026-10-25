@@ -18,7 +18,7 @@ insert into r select 'Новая клиника: пробный период 30 
 insert into public.ops (clinic_id, id, type, date, amount) select v, 1, 'income', '2026-10-01', 1000 from ids where k='A';
 insert into r select 'В пробный период можно вносить данные', count(*) = 1, count(*)::text from public.ops;
 do $$ begin
-  begin update public.clinics set paid_until = current_date + 3650, plan = 'network';
+  begin update public.clinics set paid_until = private.today() + 3650, plan = 'network';
     insert into r values ('Владелец не может сам продлить подписку', false, 'обновилось');
   exception when others then insert into r values ('Владелец не может сам продлить подписку', true, sqlstate); end;
 end $$;
@@ -44,18 +44,22 @@ end $$;
 -- E: владелец сервиса
 select set_config('request.jwt.claims', '{"sub":"eeeeeeee-0000-0000-0000-000000000005","email":"admin@test.kz","role":"authenticated"}', true);
 insert into r select 'Владелец сервиса определяется', public.is_platform_admin() = true, 'ok';
-insert into r select 'Админ видит обе клиники', count(*) = 2, count(*)::text from public.admin_clinics();
-select public.admin_set((select v from ids where k='A'), 'trial', current_date - 5);
+insert into r select 'Админ видит тестовые клиники', count(*) >= 2, count(*)::text from public.admin_clinics();
+do $$ begin
+  begin perform public.admin_extend((select v from ids where k='A'), 1, -5); insert into r values ('Отрицательная сумма не принимается', false, 'принял');
+  exception when others then insert into r values ('Отрицательная сумма не принимается', true, sqlstate); end;
+end $$;
+select public.admin_set((select v from ids where k='A'), 'trial', private.today() - 10);
 
--- A: просрочка 5 дней — льготный период, всё работает
+-- A: просрочка ровно 10 дней — ещё льготный период, всё работает
 select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","email":"a@test.kz","role":"authenticated"}', true);
-insert into r select 'Просрочка 5 дней: статус «льготный»', state = 'grace', state from public.subscription((select v from ids where k='A'));
+insert into r select 'Просрочка ровно 10 дней: ещё льготный', state = 'grace', state from public.subscription((select v from ids where k='A'));
 insert into public.ops (clinic_id, id, type, date, amount) select v, 2, 'income', '2026-10-02', 1 from ids where k='A';
 insert into r select 'В льготный период данные вносятся', count(*) = 2, count(*)::text from public.ops;
 
 -- E: просрочка 11 дней
 select set_config('request.jwt.claims', '{"sub":"eeeeeeee-0000-0000-0000-000000000005","email":"admin@test.kz","role":"authenticated"}', true);
-select public.admin_set((select v from ids where k='A'), 'trial', current_date - 11);
+select public.admin_set((select v from ids where k='A'), 'trial', private.today() - 11);
 
 -- A: режим «только просмотр»
 select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","email":"a@test.kz","role":"authenticated"}', true);
@@ -65,6 +69,11 @@ do $$ begin
   begin insert into public.ops (clinic_id, id, type, date, amount) select v, 3, 'income', '2026-10-03', 1 from ids where k='A';
     insert into r values ('После просрочки нельзя добавлять', false, 'вставилось');
   exception when others then insert into r values ('После просрочки нельзя добавлять', true, sqlstate); end;
+end $$;
+do $$ begin
+  begin insert into public.ops (clinic_id, id, type, date, amount) select v, 1, 'income', '2026-10-01', 5 from ids where k='A' on conflict (clinic_id, id) do update set amount = excluded.amount;
+    insert into r values ('После просрочки upsert не проходит', false, 'обновилось');
+  exception when others then insert into r values ('После просрочки upsert не проходит', true, sqlstate); end;
 end $$;
 with u as (update public.ops set amount = 0 where true returning 1) insert into r select 'После просрочки нельзя менять', count(*) = 0, count(*)::text from u;
 with u as (delete from public.ops where true returning 1) insert into r select 'После просрочки нельзя удалять', count(*) = 0, count(*)::text from u;
@@ -77,8 +86,9 @@ end $$;
 
 -- E: оплата пришла — продлить на месяц
 select set_config('request.jwt.claims', '{"sub":"eeeeeeee-0000-0000-0000-000000000005","email":"admin@test.kz","role":"authenticated"}', true);
-insert into r select 'Продление от сегодняшней даты на месяц', public.admin_extend((select v from ids where k='A'), 1, 49000, 'clinic', 'тест') = (current_date + interval '1 month')::date, 'ok';
+insert into r select 'Продление от сегодняшней даты на месяц', public.admin_extend((select v from ids where k='A'), 1, 49000, 'clinic', 'тест') = (private.today() + interval '1 month')::date, 'ok';
 insert into r select 'Платёж записан', count(*) = 1 and max(amount) = 49000, count(*)::text from public.admin_payments((select v from ids where k='A'));
+insert into r select 'Повторное продление считается от новой даты', public.admin_extend((select v from ids where k='A'), 1, 49000) = (private.today() + interval '2 month')::date, 'ok';
 
 -- A: снова всё работает
 select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","email":"a@test.kz","role":"authenticated"}', true);

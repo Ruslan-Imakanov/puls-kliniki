@@ -114,7 +114,7 @@ function renderSubBanner() {
   } else if (sub.state === 'grace') {
     const stop = 10 + left;
     kind = 'warn';
-    html = `<div><b>Срок подписки закончился ${fmtDate(sub.paid_until)}.</b> Оплатите в ближайшие ${days(Math.max(stop, 0))}, иначе доступ станет «только просмотр».</div>${btn}`;
+    html = `<div><b>Срок подписки закончился ${fmtDate(sub.paid_until)}.</b> Оплатите ${stop > 0 ? `в ближайшие ${days(stop + 1)}` : 'сегодня'}, иначе доступ станет «только просмотр».</div>${btn}`;
   } else if (left <= 5) {
     kind = left <= 2 ? 'warn' : 'info';
     const what = sub.state === 'trial' ? 'Пробный период' : 'Подписка';

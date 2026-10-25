@@ -81,6 +81,9 @@ async function client() {
 }
 const ok = ({ data, error }) => { if (error) throw error; return data; };
 const denied = e => e && (e.code === '42501' || /row-level security|permission denied/i.test(e.message || ''));
+// Повторять имеет смысл только обрыв связи и временные сбои сервера (08 — соединение, 53/57 — нагрузка и таймаут,
+// PGRST3xx — токен входа, обновится сам). Остальное база отвергла по существу — повтор не поможет и заблокирует очередь.
+const retryable = e => !e?.code || /^(08|53|57|PGRST3)/.test(e.code) || /fetch|network|timeout|load failed/i.test(e.message || '');
 
 // ---------- id новых записей: уникальны между сотрудниками одной клиники ----------
 function cloudNid() {
@@ -170,7 +173,8 @@ const chunks = (a, n) => { const o = []; for (let i = 0; i < a.length; i += n) o
 async function run(job) {
   const cid = S.clinic.id;
   if (job.settings) {
-    ok(await S.sb.from('clinics').update({ settings: job.settings, name: (job.settings.clinicName || S.clinic.name).slice(0, 200) }).eq('id', cid));
+    const rows = ok(await S.sb.from('clinics').update({ settings: job.settings, name: (String(job.settings.clinicName || '').trim() || S.clinic.name).slice(0, 200) }).eq('id', cid).select('id'));
+    if (!rows.length) throw { code: '42501', message: 'permission denied' }; // без прав база молча не меняет ни одной строки
     return;
   }
   if (job.log) { ok(await S.sb.from('audit_log').insert(job.log.map(e => ({ clinic_id: cid, ...e })))); return; }
@@ -194,7 +198,15 @@ async function pump() {
     try { await run(S.queue[0]); S.queue.shift(); S.fail = 0; status(); }
     catch (e) {
       console.error(e);
-      if (denied(e)) { S.queue.shift(); toast('Нет прав на это изменение — показываю данные с сервера.', 'warn'); await reload(true); continue; }
+      if (!retryable(e)) {
+        // все изменения в очереди рассчитаны от одного снимка — после отказа их нельзя отправлять, перечитываем данные
+        S.queue.length = 0; S.fail = 0;
+        try { await reload(true); } catch (er) { console.error(er); }
+        toast(expired() ? 'Подписка закончилась: данные можно смотреть и выгружать в Excel, но не менять. Изменение отменено.'
+          : denied(e) ? 'Нет прав на это изменение — показываю данные с сервера.'
+          : 'База не приняла изменение (' + (e.message || e.code) + '). Показываю данные с сервера.', 'warn');
+        continue;
+      }
       S.fail++; status(null, e);
       await sleep(Math.min(30000, 1000 * 2 ** S.fail));
     }
@@ -247,9 +259,11 @@ const RU = {
   'Invalid login credentials': 'Неверная почта или пароль',
   'Email not confirmed': 'Почта не подтверждена — откройте письмо и нажмите ссылку',
   'User already registered': 'Эта почта уже зарегистрирована — войдите или восстановите пароль',
-  'Password should be at least 6 characters': 'Пароль слишком короткий',
 };
-const ruErr = e => { const m = e?.message || String(e); for (const k in RU) if (m.includes(k)) return RU[k]; if (/rate limit|too many/i.test(m)) return 'Слишком много попыток — подождите минуту'; if (/fetch|network/i.test(m)) return 'Нет связи с сервером — проверьте интернет'; return m; };
+const ruErr = e => { const m = e?.message || String(e); for (const k in RU) if (m.includes(k)) return RU[k];
+  const short = m.match(/Password should be at least (\d+)/i); if (short) return `Пароль — не меньше ${short[1]} символов`;
+  if (/weak|pwned|leaked|compromised/i.test(m)) return 'Этот пароль слишком простой или уже утёк в интернет — придумайте другой'; if (/rate limit|too many/i.test(m)) return 'Слишком много попыток — подождите минуту'; if (/fetch|network/i.test(m)) return 'Нет связи с сервером — проверьте интернет'; return m; };
+const MIN_PW = 10; // как в Supabase → Authentication → Email → Minimum password length
 const box = () => $('#auth');
 function screen(html) {
   box().hidden = false;
@@ -282,7 +296,7 @@ function showLogin(msg) {
 }
 function showRegister() {
   screen(`<h1>Регистрация</h1><p class="auth-note">Аккаунт для владельца или сотрудника клиники. Сотрудникам сначала нужно приглашение от владельца — регистрируйтесь на ту почту, на которую оно отправлено.</p>
-    <form id="fReg" novalidate>${field('email', 'Рабочая почта', 'email', 'autocomplete="email" required')}${field('password', 'Пароль (не меньше 8 символов)', 'password', 'autocomplete="new-password" minlength="8" required')}
+    <form id="fReg" novalidate>${field('email', 'Рабочая почта', 'email', 'autocomplete="email" required')}${field('password', 'Пароль (не меньше 10 символов)', 'password', 'autocomplete="new-password" minlength="10" required')}
     <label class="check"><input type="checkbox" name="agree"> <span>Принимаю <a href="terms.html" target="_blank">условия</a> и <a href="privacy.html" target="_blank">политику конфиденциальности</a></span></label>
     <p class="form-err" hidden></p><button type="submit" class="btn primary wide">Создать аккаунт</button></form>
     <div class="auth-links"><button class="link" id="toLogin">У меня уже есть аккаунт</button></div>`);
@@ -290,7 +304,7 @@ function showRegister() {
   $('#fReg').onsubmit = async e => {
     e.preventDefault(); const f = e.target, email = f.email.value.trim(), password = f.password.value;
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return errOut(f, 'Проверьте почту');
-    if (password.length < 8) return errOut(f, 'Пароль — не меньше 8 символов');
+    if (password.length < MIN_PW) return errOut(f, `Пароль — не меньше ${MIN_PW} символов`);
     if (!f.agree.checked) return errOut(f, 'Нужно согласие с условиями');
     busy(f, true, 'Создаю…'); errOut(f, '');
     const { data, error } = await S.sb.auth.signUp({ email, password, options: { emailRedirectTo: redirect() } });
@@ -316,10 +330,10 @@ function showForgot() {
   };
 }
 function showNewPassword(done) {
-  screen(`<h1>Новый пароль</h1><form id="fNew" novalidate>${field('password', 'Новый пароль (не меньше 8 символов)', 'password', 'autocomplete="new-password" required')}<p class="form-err" hidden></p><button type="submit" class="btn primary wide">Сохранить</button></form>`);
+  screen(`<h1>Новый пароль</h1><form id="fNew" novalidate>${field('password', 'Новый пароль (не меньше 10 символов)', 'password', 'autocomplete="new-password" required')}<p class="form-err" hidden></p><button type="submit" class="btn primary wide">Сохранить</button></form>`);
   $('#fNew').onsubmit = async e => {
     e.preventDefault(); const f = e.target;
-    if (f.password.value.length < 8) return errOut(f, 'Пароль — не меньше 8 символов');
+    if (f.password.value.length < MIN_PW) return errOut(f, `Пароль — не меньше ${MIN_PW} символов`);
     busy(f, true);
     const { error } = await S.sb.auth.updateUser({ password: f.password.value });
     busy(f, false);

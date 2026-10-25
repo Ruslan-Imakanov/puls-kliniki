@@ -18,6 +18,10 @@ insert into public.ops (clinic_id, id, type, date, amount) select v, 1, 'income'
 insert into public.invites (clinic_id, email, role) select v, 'c@test.kz', 'viewer' from ids where k='A';
 insert into public.invites (clinic_id, email, role) select v, 'd@test.kz', 'accountant' from ids where k='A';
 insert into r select 'A видит свою операцию', count(*) = 1, count(*)::text from public.ops;
+insert into public.audit_log (clinic_id, action, text) select v, 'Тест', 'журнал' from ids where k='A';
+insert into r select 'A пишет журнал от своего имени', count(*) = 1, count(*)::text from public.audit_log where user_id = 'aaaaaaaa-0000-0000-0000-000000000001';
+with u as (delete from public.clinic_members where user_id = 'aaaaaaaa-0000-0000-0000-000000000001' returning 1) insert into r select 'Владелец не удаляет сам себя', count(*) = 0, count(*)::text from u;
+with u as (update public.clinic_members set role = 'viewer' where user_id = 'aaaaaaaa-0000-0000-0000-000000000001' returning 1) insert into r select 'Владелец не понижает сам себя', count(*) = 0, count(*)::text from u;
 
 -- B: владелец другой клиники
 select set_config('request.jwt.claims', '{"sub":"bbbbbbbb-0000-0000-0000-000000000002","email":"b@test.kz","role":"authenticated"}', true);
@@ -33,6 +37,11 @@ do $$ begin
 end $$;
 with u as (update public.ops set amount = 0 where true returning 1) insert into r select 'B не может менять операции А', count(*) = 0, count(*)::text from u;
 with u as (delete from public.ops where true returning 1) insert into r select 'B не может удалять операции А', count(*) = 0, count(*)::text from u;
+do $$ begin
+  begin insert into public.audit_log (clinic_id, action, text) select v, 'взлом', 'x' from ids where k='A';
+    insert into r values ('B не пишет в журнал А', false, 'вставилось');
+  exception when others then insert into r values ('B не пишет в журнал А', true, sqlstate); end;
+end $$;
 do $$ begin
   begin insert into public.clinic_members (clinic_id, user_id, role) select v, 'bbbbbbbb-0000-0000-0000-000000000002', 'owner' from ids where k='A';
     insert into r values ('B не может добавить себя в клинику А', false, 'вставилось');
@@ -50,6 +59,8 @@ do $$ begin
   exception when others then insert into r values ('C (просмотр) не может добавлять', true, sqlstate); end;
 end $$;
 with u as (update public.clinics set name = 'взлом' where true returning 1) insert into r select 'C не может менять клинику', count(*) = 0, count(*)::text from u;
+with u as (delete from public.clinic_members where user_id = 'cccccccc-0000-0000-0000-000000000003' returning 1) insert into r select 'C может сам выйти из клиники', count(*) = 1, count(*)::text from u;
+insert into r select 'C после выхода ничего не видит', count(*) = 0, count(*)::text from public.ops;
 
 -- D: приглашён, но почта не подтверждена
 select set_config('request.jwt.claims', '{"sub":"dddddddd-0000-0000-0000-000000000004","email":"d@test.kz","role":"authenticated"}', true);

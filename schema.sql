@@ -5,6 +5,7 @@
 --
 -- id записей задаёт программа (уникальны внутри клиники), поэтому ключ — (clinic_id, id).
 -- Поля совпадают с моделью программы (public/js/model.js, demo.js) — синхронизацию делает public/js/cloud.js.
+-- После этого файла выполнить migrations/002_billing.sql (подписки) и migrations/003_fixes.sql (исправления).
 
 create extension if not exists pgcrypto;
 
