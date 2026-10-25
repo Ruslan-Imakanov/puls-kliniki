@@ -1,8 +1,8 @@
 // Разделы «Данные»: загрузка из Excel/CSV, справочники, настройки.
 import { $, $$, esc, opt, money, moneyC, num, pct, today, ym, fmtDate, toast, openModal, parseNum, parseDate, parseCSV, toCSV, hash, norm, copyText } from './util.js';
-import { store, commit, add, update, remove, usage, resetDemo, clearAll, exportJSON, importJSON, nid } from './store.js';
+import { store, hooks, commit, add, update, remove, usage, resetDemo, clearAll, exportJSON, importJSON, nid } from './store.js';
 import { GROUPS, TAGS, RES_KINDS, CP_KINDS, PAY_SCHEMES } from './model.js';
-import { pageHead, seg, empty, pill, statusPill, rerender, go, months as periodMonths } from './ui.js';
+import { PLAN_NAME, payLink, pageHead, seg, empty, pill, statusPill, rerender, go, months as periodMonths } from './ui.js';
 import { loadXLSX, downloadXlsx, sheetsAll, xlName } from './export.js';
 import { completeMonths } from './calc.js';
 import { ROLES, myEmail, myRole, team, invite, revokeInvite, setRole, removeMember, signOut, switchClinic } from './cloud.js';
@@ -323,6 +323,22 @@ export function viewRefs(el) {
   });
 }
 
+// Карточка подписки (в облачном режиме): тариф, срок и кнопка «Оплатить» в WhatsApp
+const SUB_STATE = { trial: ['Пробный период', 'info'], active: ['Оплачено', 'info'], grace: ['Нужна оплата', 'warn'], expired: ['Только просмотр', 'crit'] };
+function subCard(sub, clinic) {
+  const [label, kind] = SUB_STATE[sub.state] || ['', ''];
+  const ask = payLink(`Здравствуйте! Хочу оплатить подписку «Пульс клиники» для клиники «${clinic}».`);
+  return `<section class="card"><div class="card-head"><h2>Подписка</h2><span class="pill ${kind}">${label}</span></div>
+    <div class="kv-grid">
+      <div><span>Тариф</span><b>${esc(PLAN_NAME[sub.plan] || sub.plan)}</b></div>
+      <div><span>Оплачено до</span><b>${fmtDate(sub.paid_until)}</b></div>
+      <div><span>${sub.days_left >= 0 ? 'Осталось' : 'Просрочено'}</span><b>${Math.abs(sub.days_left)} дн.</b></div>
+    </div>
+    <p class="note">Оплата по счёту: напишите нам, пришлём счёт и акт. После поступления денег доступ продлевается в тот же день. Если срок закончился, у вас есть 10 дней, затем клиника переходит в режим «только просмотр»: данные сохраняются, их можно смотреть и выгружать в Excel.</p>
+    <div class="row-actions"><a class="btn primary" href="${ask}" target="_blank" rel="noopener">Оплатить или продлить в WhatsApp</a></div>
+  </section>`;
+}
+
 // ================= НАСТРОЙКИ =================
 export function viewSettings(el) {
   const s = store.s, st = s.settings;
@@ -336,6 +352,7 @@ export function viewSettings(el) {
   <section class="card"><div class="card-head"><h2>Параметры расчётов</h2></div>
     <datalist id="curList">${[['₸', 'тенге'], ['сўм', 'узбекский сум'], ['$', 'доллар'], ['€', 'евро'], ['₽', 'рубль'], ['сом', 'киргизский сом'], ['₼', 'манат'], ['֏', 'драм'], ['₾', 'лари'], ['Br', 'белорусский рубль'], ['£', 'фунт'], ['AED', 'дирхам ОАЭ']].map(([c, n]) => `<option value="${c}">${n}</option>`).join('')}</datalist>
     <div class="form-grid three">${P.map(([k, l, t, hint]) => `<label class="f">${esc(l)}${hint ? ` <small>${esc(hint)}</small>` : ''}<input data-set="${k}" data-t="${t}" ${k === 'currency' ? 'list="curList" placeholder="выберите или впишите"' : ''} ${t !== 'text' ? 'inputmode="decimal"' : ''} value="${esc(t === 'pct' ? num((st[k] || 0) * 100, 1) : st[k] ?? '')}"></label>`).join('')}</div></section>
+  ${cloud && hooks.sub?.() ? subCard(hooks.sub(), st.clinicName) : ''}
   ${cloud ? `<section class="card"><div class="card-head"><h2>Команда и доступ</h2><span class="muted small">вы: ${esc(myEmail())} · ${esc(ROLES[myRole()] || '')}</span></div>
     <div id="teamBox"><p class="muted">Загружаю…</p></div>
     <div class="row-actions"><button class="btn ghost" id="swClinic">Сменить клинику</button><button class="btn ghost" id="signOut">Выйти</button></div>

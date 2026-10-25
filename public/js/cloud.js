@@ -58,7 +58,7 @@ function norm(t, o) {
 const keyOf = (t, r) => keyCols(t).map(k => r[k]).join('|');
 
 // ---------- состояние ----------
-const S = { sb: null, user: null, clinic: null, role: null, snap: {}, settingsJ: '', logT: '', queue: [], busy: false, fail: 0, loadedAt: 0, lastId: 0 };
+const S = { sb: null, user: null, clinic: null, role: null, sub: null, snap: {}, settingsJ: '', logT: '', queue: [], busy: false, fail: 0, loadedAt: 0, lastId: 0 };
 export const cloudState = S;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
@@ -114,6 +114,7 @@ function snapshot() {
 export async function loadClinic(cid) {
   const clinic = ok(await S.sb.from('clinics').select('*').eq('id', cid).single());
   const me = ok(await S.sb.from('clinic_members').select('role').eq('clinic_id', cid).eq('user_id', S.user.id).single());
+  const sub = ok(await S.sb.rpc('subscription', { p_clinic: cid }))?.[0] || null; // состояние подписки считает база по своей дате
   const tables = Object.keys(COLS);
   const [rows, log] = await Promise.all([
     Promise.all(tables.map(t => fetchAll(t, cid))),
@@ -124,14 +125,16 @@ export async function loadClinic(cid) {
   s.settings = { ...defaultSettings(), ...(clinic.settings || {}), clinicName: clinic.name };
   s.log = log.map(e => ({ t: e.t, action: e.action, text: e.email ? `${e.text || ''} · ${e.email}` : e.text }));
   s.nextId = 0;
-  S.clinic = clinic; S.role = me.role; S.loadedAt = Date.now();
+  S.clinic = clinic; S.role = me.role; S.sub = sub; S.loadedAt = Date.now();
   store.s = s; store.mode = 'cloud';
   snapshot();
   return s;
 }
 
 // ---------- запись: разница с последней сохранённой версией ----------
-const canWrite = t => (t === 'settings' ? S.role === 'owner' : FIN.has(t) ? ['owner', 'accountant'].includes(S.role) : S.role !== 'viewer');
+// Подписка закончилась больше чем 10 дней назад — клинику можно смотреть и выгружать, но не менять (база тоже не даст)
+const expired = () => S.sub?.state === 'expired';
+const canWrite = t => !expired() && (t === 'settings' ? S.role === 'owner' : FIN.has(t) ? ['owner', 'accountant'].includes(S.role) : S.role !== 'viewer');
 const WHAT = { settings: 'настройки клиники', fin: 'финансовые данные', clin: 'данные клиники' };
 function persist() {
   if (!S.clinic) return;
@@ -151,14 +154,14 @@ function persist() {
     if (canWrite('settings')) { jobs.push({ settings: JSON.parse(setJ) }); S.settingsJ = setJ; } else deniedSet.add('settings');
   }
   const fresh = store.s.log.filter(e => e.t > S.logT && !e.remote);
-  if (fresh.length && S.role !== 'viewer') { jobs.push({ log: fresh.map(e => ({ t: e.t, action: e.action, text: e.text })) }); S.logT = fresh.reduce((a, e) => (e.t > a ? e.t : a), S.logT); }
+  if (fresh.length && S.role !== 'viewer' && !expired()) { jobs.push({ log: fresh.map(e => ({ t: e.t, action: e.action, text: e.text })) }); S.logT = fresh.reduce((a, e) => (e.t > a ? e.t : a), S.logT); }
   if (deniedSet.size) {
     deniedSet.forEach(t => {
       if (t === 'settings') store.s.settings = JSON.parse(S.settingsJ);
       else store.s[t] = [...S.snap[t].values()].map(j => JSON.parse(j));
     });
     const kinds = [...new Set([...deniedSet].map(t => (t === 'settings' ? 'settings' : FIN.has(t) ? 'fin' : 'clin')))].map(k => WHAT[k]).join(' и ');
-    toast(`Роль «${ROLES[S.role]}» не может менять ${kinds}. Изменение отменено.`, 'warn');
+    toast(expired() ? 'Подписка закончилась: данные можно смотреть и выгружать в Excel, но не менять. Изменение отменено.' : `Роль «${ROLES[S.role]}» не может менять ${kinds}. Изменение отменено.`, 'warn');
     setTimeout(() => hooks.changed?.(), 0); // поле ввода на экране тоже должно вернуться к сохранённому
   }
   if (jobs.length) { S.queue.push(...jobs); pump(); }
@@ -234,6 +237,7 @@ export const setRole = async (uid, role) => ok(await S.sb.from('clinic_members')
 export const removeMember = async uid => ok(await S.sb.from('clinic_members').delete().eq('clinic_id', S.clinic.id).eq('user_id', uid));
 export const myEmail = () => S.user?.email || '';
 export const myRole = () => S.role;
+export const mySub = () => S.sub;
 export async function signOut() { await flush(); await S.sb.auth.signOut(); prefSet('clinic', null); location.href = 'app.html'; }
 export function switchClinic() { prefSet('clinic', null); location.reload(); }
 
@@ -374,7 +378,7 @@ async function openClinic(cid, start) {
   attach();
   boxHide(); start();
 }
-function attach() { hooks.persist = persist; hooks.nid = cloudNid; hooks.role = () => S.role; hooks.roleName = () => ROLES[S.role] || ''; }
+function attach() { hooks.persist = persist; hooks.nid = cloudNid; hooks.role = () => S.role; hooks.roleName = () => ROLES[S.role] || ''; hooks.sub = () => S.sub; }
 const boxHide = () => { box().hidden = true; box().innerHTML = ''; document.querySelector('.app').hidden = false; };
 
 // ---------- запуск ----------

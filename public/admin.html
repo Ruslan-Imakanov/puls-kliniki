@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Клиники и подписки — Пульс клиники</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=Unbounded:wght@500;600&display=swap">
+<style>
+  :root { --bg:#f4f7f6; --surface:#fff; --ink:#0f201d; --ink-2:#3f514c; --muted:#6b7c77; --line:#dce5e2; --accent:#0d7a6a; --accent-soft:rgba(13,122,106,.1);
+    --warn:#b86b00; --warn-bg:#fff1d6; --crit:#b3261e; --crit-bg:#fde4e1; --ok-bg:#dff3ee; --shadow:0 1px 2px rgba(15,43,39,.06),0 12px 40px rgba(15,43,39,.08); }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0e1b19; --surface:#15272a; --ink:#e8f1ef; --ink-2:#b9cbc6; --muted:#8aa19b; --line:#25403c; --accent:#5fd0bb; --accent-soft:rgba(95,208,187,.14);
+    --warn:#f2b45a; --warn-bg:#3b2d12; --crit:#ff8d85; --crit-bg:#3d1f1d; --ok-bg:#133a33; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 "Golos Text", system-ui, sans-serif; }
+  header { display: flex; align-items: center; gap: 12px; padding: 14px max(16px, 3vw); background: var(--surface); border-bottom: 1px solid var(--line); }
+  header b { font: 600 17px "Unbounded", sans-serif; }
+  header span { color: var(--muted); }
+  header a { margin-left: auto; color: var(--accent); text-decoration: none; font-weight: 600; }
+  main { padding: 20px max(16px, 3vw) 60px; max-width: 1400px; margin: 0 auto; }
+  .msg { max-width: 520px; margin: 12vh auto; padding: 28px; background: var(--surface); border-radius: 16px; box-shadow: var(--shadow); text-align: center; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 18px; }
+  .tile { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; }
+  .tile span { display: block; color: var(--muted); font-size: 13px; }
+  .tile b { font: 600 24px "Unbounded", sans-serif; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; align-items: center; }
+  .chip { padding: 7px 14px; border-radius: 99px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); cursor: pointer; font: inherit; }
+  .chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn { padding: 8px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; font-weight: 600; cursor: pointer; text-decoration: none; display: inline-block; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.small { padding: 5px 10px; font-size: 13px; }
+  .btn:disabled { opacity: .55; cursor: progress; }
+  .wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
+  table { width: 100%; border-collapse: collapse; min-width: 980px; }
+  th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  th { color: var(--muted); font-weight: 500; font-size: 13px; white-space: nowrap; }
+  tr:last-child td { border-bottom: 0; }
+  td.num, th.num { text-align: right; }
+  .nm { font-weight: 600; }
+  .sub { color: var(--muted); font-size: 13px; }
+  .pill { display: inline-block; padding: 2px 9px; border-radius: 99px; font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+  .pill.trial { background: var(--accent-soft); color: var(--accent); }
+  .pill.active { background: var(--ok-bg); color: var(--accent); }
+  .pill.grace { background: var(--warn-bg); color: var(--warn); }
+  .pill.expired { background: var(--crit-bg); color: var(--crit); }
+  .acts { display: flex; gap: 6px; flex-wrap: wrap; }
+  dialog { border: 0; border-radius: 16px; padding: 22px; width: min(440px, calc(100vw - 24px)); box-shadow: var(--shadow); background: var(--surface); color: var(--ink); }
+  dialog::backdrop { background: rgba(0, 0, 0, .45); }
+  dialog h2 { margin: 0 0 12px; font: 600 18px "Unbounded", sans-serif; }
+  label { display: block; margin: 10px 0 4px; color: var(--ink-2); font-size: 13px; }
+  input, select { width: 100%; padding: 9px 11px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); font: inherit; }
+  .row { display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; }
+  .err { color: var(--crit); margin: 10px 0 0; font-size: 14px; min-height: 1em; }
+  .hist td, .hist th { padding: 6px 8px; font-size: 13.5px; }
+  .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 18px; border-radius: 12px; z-index: 9; }
+  @media (max-width: 760px) { .wrap table { min-width: 0; } .wrap thead { display: none; } .wrap tr { display: block; padding: 10px 12px; border-bottom: 1px solid var(--line); } .wrap td { display: flex; justify-content: space-between; gap: 12px; border: 0; padding: 3px 0; text-align: right; } .wrap td::before { content: attr(data-l); color: var(--muted); text-align: left; } .wrap td.nm::before { content: none; } }
+</style>
+</head>
+<body>
+<header><b>Пульс клиники</b><span>клиники и подписки</span><a href="app.html">В программу</a></header>
+<main id="root"><div class="msg"><p>Загрузка…</p></div></main>
+<dialog id="dlg"></dialog>
+<script src="js/vendor/supabase.js"></script>
+<script>
+// Панель владельца сервиса. Вход — тем же аккаунтом, что и в программе. Что показывать и менять, решает база:
+// функции admin_* отвечают только тем, кто записан в таблицу platform_admins.
+const CLOUD = { url: 'https://zqptdixqcatezflrmzxu.supabase.co', key: 'sb_publishable_8iOTEULVQcvB83Yq-oqJYQ_89jp1W8N' };
+const PLAN = { trial: 'Пробный', start: 'Старт', clinic: 'Клиника', network: 'Сеть' };
+const PRICE = { start: 29000, clinic: 49000, network: 89000 };       // ₸ в месяц — подставляются в форму продления
+const STATE = { trial: 'Пробный период', active: 'Оплачено', grace: 'Просрочка до 10 дн.', expired: 'Только просмотр' };
+const $ = q => document.querySelector(q), root = $('#root'), dlg = $('#dlg');
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const dt = iso => iso ? iso.slice(8, 10) + '.' + iso.slice(5, 7) + '.' + iso.slice(2, 4) : '—';
+const kzt = n => Number(n || 0).toLocaleString('ru-RU') + ' ₸';
+const sb = window.supabase.createClient(CLOUD.url, CLOUD.key, { auth: { persistSession: true, autoRefreshToken: true, storageKey: 'pulse-auth' } });
+let rows = [], filter = 'all';
+
+const say = t => { const e = document.createElement('div'); e.className = 'toast'; e.textContent = t; document.body.append(e); setTimeout(() => e.remove(), 3200); };
+const msg = html => { root.innerHTML = `<div class="msg">${html}</div>`; };
+const rpc = async (fn, args) => { const { data, error } = await sb.rpc(fn, args); if (error) throw error; return data; };
+
+async function boot() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) return msg('<h2>Нужен вход</h2><p>Войдите в программу под своей почтой, затем вернитесь на эту страницу.</p><p><a class="btn primary" href="app.html">Войти</a></p>');
+  let ok = false;
+  try { ok = await rpc('is_platform_admin'); } catch (e) { ok = false; }
+  if (!ok) return msg(`<h2>Нет доступа</h2><p>Аккаунт ${esc(session.user.email)} не входит в число владельцев сервиса.</p><p><a class="btn" href="app.html">В программу</a></p>`);
+  await load();
+}
+async function load() {
+  try { rows = await rpc('admin_clinics'); } catch (e) { return msg('<h2>Не удалось загрузить</h2><p>' + esc(e.message) + '</p>'); }
+  draw();
+}
+
+const needs = r => r.state === 'grace' || r.state === 'expired' || (r.days_left <= 7 && r.days_left >= 0);
+function draw() {
+  const cnt = f => rows.filter(f).length;
+  const shown = rows.filter({ all: () => true, soon: needs, trial: r => r.state === 'trial', active: r => r.state === 'active', expired: r => r.state === 'grace' || r.state === 'expired' }[filter]);
+  const paid = rows.reduce((a, r) => a + Number(r.paid_total || 0), 0);
+  root.innerHTML = `
+  <div class="tiles">
+    <div class="tile"><span>Клиник всего</span><b>${rows.length}</b></div>
+    <div class="tile"><span>Платят сейчас</span><b>${cnt(r => r.state === 'active')}</b></div>
+    <div class="tile"><span>На пробном периоде</span><b>${cnt(r => r.state === 'trial')}</b></div>
+    <div class="tile"><span>Нужно напомнить</span><b>${cnt(needs)}</b></div>
+    <div class="tile"><span>Получено всего</span><b>${kzt(paid)}</b></div>
+  </div>
+  <div class="bar">${[['all', 'Все'], ['soon', 'Нужно напомнить'], ['trial', 'Пробные'], ['active', 'Оплаченные'], ['expired', 'Просроченные']]
+    .map(([k, l]) => `<button class="chip" data-f="${k}" aria-pressed="${filter === k}">${l}</button>`).join('')}
+    <button class="btn small" id="reload" style="margin-left:auto">Обновить</button></div>
+  <div class="wrap"><table><thead><tr><th>Клиника</th><th>Владелец</th><th>Зарегистрирована</th><th>Тариф</th><th>Оплачено до</th><th>Осталось</th><th>Статус</th><th class="num">Людей</th><th>Последняя оплата</th><th></th></tr></thead><tbody>
+  ${shown.length ? shown.map(r => `<tr>
+    <td class="nm">${esc(r.name)}</td>
+    <td data-l="Владелец">${esc(r.owner_email || '—')}</td>
+    <td data-l="Зарегистрирована">${dt(r.created_at)}</td>
+    <td data-l="Тариф">${PLAN[r.plan] || r.plan}</td>
+    <td data-l="Оплачено до">${dt(r.paid_until)}</td>
+    <td data-l="Осталось">${r.days_left >= 0 ? r.days_left + ' дн.' : '−' + Math.abs(r.days_left) + ' дн.'}</td>
+    <td data-l="Статус"><span class="pill ${r.state}">${STATE[r.state]}</span></td>
+    <td class="num" data-l="Людей">${r.members}</td>
+    <td data-l="Последняя оплата">${r.last_payment ? dt(r.last_payment) : '—'}</td>
+    <td><div class="acts"><button class="btn small primary" data-x="${r.id}">Продлить</button><button class="btn small" data-h="${r.id}">История</button><button class="btn small" data-e="${r.id}">Изменить</button>${r.owner_email ? `<a class="btn small" href="${mail(r)}">Написать</a>` : ''}</div></td>
+  </tr>`).join('') : '<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:26px">Здесь пока пусто</td></tr>'}
+  </tbody></table></div>`;
+  root.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { filter = b.dataset.f; draw(); });
+  $('#reload').onclick = load;
+  root.querySelectorAll('[data-x]').forEach(b => b.onclick = () => extend(b.dataset.x));
+  root.querySelectorAll('[data-h]').forEach(b => b.onclick = () => history(b.dataset.h));
+  root.querySelectorAll('[data-e]').forEach(b => b.onclick = () => edit(b.dataset.e));
+}
+// письмо-напоминание владельцу клиники
+function mail(r) {
+  const late = r.days_left < 0, subj = late ? 'Подписка «Пульс клиники»: нужна оплата' : 'Подписка «Пульс клиники» скоро заканчивается';
+  const body = `Здравствуйте!\n\n${late ? `Срок подписки клиники «${r.name}» закончился ${dt(r.paid_until)}.` : `Подписка клиники «${r.name}» действует до ${dt(r.paid_until)}.`} Чтобы работа не прервалась, пришлём счёт на оплату. Подскажите, пожалуйста, на какое юридическое лицо или ИП его выставить?\n\nРуслан\n+7 707 611 30 75`;
+  return `mailto:${encodeURIComponent(r.owner_email)}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}`;
+}
+const find = id => rows.find(r => r.id === id);
+const opts = (o, v) => Object.entries(o).map(([k, l]) => `<option value="${k}" ${k === v ? 'selected' : ''}>${l}</option>`).join('');
+function open(html, onOk, okText = 'Сохранить') {
+  dlg.innerHTML = html + `<p class="err" id="err"></p><div class="row"><button class="btn" id="no" type="button">Закрыть</button>${onOk ? `<button class="btn primary" id="ok" type="button">${okText}</button>` : ''}</div>`;
+  $('#no').onclick = () => dlg.close();
+  if (onOk) $('#ok').onclick = async e => { e.target.disabled = true; $('#err').textContent = ''; try { await onOk(); dlg.close(); await load(); } catch (er) { $('#err').textContent = er.message || String(er); e.target.disabled = false; } };
+  dlg.showModal();
+}
+function extend(id) {
+  const r = find(id), plan = r.plan === 'trial' ? 'start' : r.plan;
+  open(`<h2>Продлить: ${esc(r.name)}</h2>
+    <p class="sub">Сейчас оплачено до ${dt(r.paid_until)}. Новый срок считается от этой даты, а если срок прошёл — от сегодняшнего дня.</p>
+    <label>Тариф</label><select id="plan">${opts({ start: 'Старт', clinic: 'Клиника', network: 'Сеть' }, plan)}</select>
+    <label>На сколько месяцев</label><select id="mon">${[1, 3, 6, 12].map(n => `<option value="${n}">${n}</option>`).join('')}</select>
+    <label>Сумма, полученная от клиники, ₸</label><input id="amt" inputmode="numeric">
+    <label>Заметка (номер счёта, кто платил)</label><input id="note" maxlength="200">`,
+    async () => {
+      const m = +$('#mon').value, a = +String($('#amt').value).replace(/\s/g, '').replace(',', '.');
+      if (!(a >= 0)) throw new Error('Введите сумму');
+      const d = await rpc('admin_extend', { p_clinic: id, p_months: m, p_amount: a, p_plan: $('#plan').value, p_note: $('#note').value.trim() || null });
+      say('Продлено до ' + dt(d));
+    }, 'Продлить');
+  const fill = () => { $('#amt').value = (PRICE[$('#plan').value] * +$('#mon').value - (+$('#mon').value === 12 ? PRICE[$('#plan').value] * 2 : 0)).toLocaleString('ru-RU'); };
+  $('#plan').onchange = fill; $('#mon').onchange = fill; fill();
+}
+function edit(id) {
+  const r = find(id);
+  open(`<h2>Изменить: ${esc(r.name)}</h2>
+    <p class="sub">Ручная правка тарифа и даты, например подарить пробный период или исправить ошибку.</p>
+    <label>Тариф</label><select id="plan">${opts(PLAN, r.plan)}</select>
+    <label>Оплачено до</label><input id="until" type="date" value="${esc(r.paid_until)}">`,
+    async () => {
+      if (!$('#until').value) throw new Error('Укажите дату');
+      await rpc('admin_set', { p_clinic: id, p_plan: $('#plan').value, p_paid_until: $('#until').value });
+      say('Сохранено');
+    });
+}
+async function history(id) {
+  const r = find(id);
+  try {
+    const p = await rpc('admin_payments', { p_clinic: id });
+    open(`<h2>Платежи: ${esc(r.name)}</h2>${p.length ? `<table class="hist"><thead><tr><th>Дата</th><th class="num">Сумма</th><th>Мес.</th><th>Тариф</th><th>До</th></tr></thead><tbody>${p.map(x =>
+      `<tr><td>${dt(x.created_at)}</td><td class="num">${x.amount == null ? '—' : kzt(x.amount)}</td><td>${x.months}</td><td>${PLAN[x.plan] || ''}</td><td>${dt(x.paid_until_after)}</td></tr>${x.note ? `<tr><td colspan="5" class="sub">${esc(x.note)}</td></tr>` : ''}`).join('')}</tbody></table>` : '<p class="sub">Платежей пока нет.</p>'}`);
+  } catch (e) { say(e.message); }
+}
+boot();
+</script>
+</body>
+</html>

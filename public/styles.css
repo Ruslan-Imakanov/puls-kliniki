@@ -394,3 +394,11 @@ pre.tpl { margin: 0 0 8px; padding: 10px 12px; background: var(--surface-2); bor
 .invite-row input, .invite-row select { height: 36px; border: 1px solid var(--line-2); border-radius: var(--r-sm); background: var(--surface); padding: 0 10px; }
 table.team select { height: 32px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); padding: 0 6px; }
 a.pill { text-decoration: none; }
+
+/* ---------- подписка: баннер сверху раздела ---------- */
+.sub-banner { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 14px max(24px, env(safe-area-inset-right, 0px)) 0; max-width: 1432px; padding: 11px 16px; border-radius: 12px; font-size: 14px; line-height: 1.4; background: var(--accent-soft); color: var(--ink); border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); }
+.sub-banner[hidden] { display: none; }
+.sub-banner.warn { background: color-mix(in srgb, var(--warn) 16%, transparent); border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
+.sub-banner.crit { background: color-mix(in srgb, var(--crit) 12%, transparent); border-color: color-mix(in srgb, var(--crit) 45%, transparent); }
+.sub-banner .btn { flex: none; text-decoration: none; }
+@media (max-width: 760px) { .sub-banner { flex-direction: column; align-items: stretch; } .sub-banner .btn { text-align: center; } }

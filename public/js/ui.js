@@ -94,6 +94,34 @@ export function go(id, params = {}) {
   if (location.hash.slice(1) === id) render();
   else location.hash = id;
 }
+// ---------- подписка: баннер и режим «только просмотр» ----------
+export const SUPPORT_WA = '77076113075';
+export const PLAN_NAME = { trial: 'Пробный период', start: 'Старт', clinic: 'Клиника', network: 'Сеть' };
+export const payLink = text => `https://wa.me/${SUPPORT_WA}?text=${encodeURIComponent(text)}`;
+const days = n => `${n} ${n % 10 === 1 && n % 100 !== 11 ? 'день' : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? 'дня' : 'дней'}`;
+function renderSubBanner() {
+  const el = $('#subBanner'), sub = store.mode === 'cloud' && hooks.sub ? hooks.sub() : null;
+  const ro = sub?.state === 'expired';
+  ['#addOp', '#fab'].forEach(q => { const b = $(q); if (b) b.hidden = ro; });
+  if (!sub) { el.hidden = true; return; }
+  const left = sub.days_left, name = store.s.settings.clinicName || 'клиника';
+  const ask = payLink(`Здравствуйте! Хочу оплатить подписку «Пульс клиники» для клиники «${name}».`);
+  const btn = `<a class="btn small primary" href="${ask}" target="_blank" rel="noopener">Оплатить в WhatsApp</a>`;
+  let kind = '', html = '';
+  if (sub.state === 'expired') {
+    kind = 'crit';
+    html = `<div><b>Подписка закончилась ${fmtDate(sub.paid_until)}.</b> Данные сохранены: их можно смотреть и выгружать в Excel, но вносить новое нельзя. Оплатите, и доступ откроется сразу.</div>${btn}`;
+  } else if (sub.state === 'grace') {
+    const stop = 10 + left;
+    kind = 'warn';
+    html = `<div><b>Срок подписки закончился ${fmtDate(sub.paid_until)}.</b> Оплатите в ближайшие ${days(Math.max(stop, 0))}, иначе доступ станет «только просмотр».</div>${btn}`;
+  } else if (left <= 5) {
+    kind = left <= 2 ? 'warn' : 'info';
+    const what = sub.state === 'trial' ? 'Пробный период' : 'Подписка';
+    html = `<div><b>${what} заканчивается ${left <= 0 ? 'сегодня' : `через ${days(left)}`}</b> (${fmtDate(sub.paid_until)}). Чтобы работа не прервалась, продлите заранее.</div>${btn}`;
+  }
+  el.hidden = !html; el.className = 'sub-banner ' + kind; el.innerHTML = html;
+}
 export function render() {
   const id = sect(location.hash.slice(1)) ? location.hash.slice(1) : 'overview';
   if (id !== viewState.id) { viewState.id = id; if (!viewState.keep) window.scrollTo(0, 0); }
@@ -104,7 +132,8 @@ export function render() {
   $$('.bnav [data-nav]').forEach(b => b.classList.toggle('on', b.dataset.nav === id || (b.dataset.nav === 'more' && !MOBILE_MAIN.includes(id))));
   $('#pageTitle').textContent = s.name;
   $('#modeBadge').innerHTML = store.mode === 'demo' ? `<span class="pill warn">Демо-данные</span>${window.PULSE_DEMO_ONLY ? '' : ' <a class="pill info" href="app.html">Войти в свою клинику</a>'}`
-    : store.mode === 'cloud' && hooks.role && hooks.role() !== 'owner' ? `<span class="pill">${esc(hooks.roleName())}</span>` : '';
+    : store.mode === 'cloud' ? `${hooks.sub?.()?.state === 'expired' ? '<span class="pill crit">Только просмотр</span> ' : ''}${hooks.role && hooks.role() !== 'owner' ? `<span class="pill">${esc(hooks.roleName())}</span>` : ''}` : '';
+  renderSubBanner();
   const noPeriod = ['import', 'refs', 'settings', 'stock'].includes(id);
   $('#period').hidden = noPeriod;
   if (!noPeriod) renderPeriod();
