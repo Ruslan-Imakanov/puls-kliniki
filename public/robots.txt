@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /app
+Disallow: /js/
+
+Sitemap: https://puls-kliniki.imakanovr.workers.dev/sitemap.xml
